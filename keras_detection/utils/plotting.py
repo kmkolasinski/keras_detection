@@ -24,6 +24,10 @@ def plot_to_image(figure, format: str = "jpg"):
     return image
 
 
+def resize_nearest_neighbour(image: np.ndarray, size: Tuple[int, int]) -> np.ndarray:
+    return np.array(Image.fromarray(image).resize(size, resample=Image.NEAREST))
+
+
 def draw_objectness_map(
     image: Union[np.ndarray, tf.Tensor],
     objectness: Union[np.ndarray, tf.Tensor],
@@ -48,8 +52,8 @@ def draw_objectness_map(
     plt.imshow(image)
 
     objectness = (np.clip(objectness, 0, 1) * 255).astype("uint8")
-    objectness = Image.fromarray(objectness).resize((height, width))
-    plt.imshow(np.array(objectness) / 255, alpha=0.5)
+    objectness = resize_nearest_neighbour(objectness, (width, height))
+    plt.imshow(objectness / 255, alpha=0.5)
     plt.colorbar()
     return plot_to_image(figure, format=fmt)
 
@@ -97,8 +101,8 @@ def draw_classes_map(
         color_map[j, i, :] = color
 
     color_map = (np.clip(color_map, 0, 1) * 255).astype("uint8")
-    color_map = Image.fromarray(color_map).resize((height, width))
-    plt.imshow(np.array(color_map) / 255, alpha=0.5)
+    color_map = resize_nearest_neighbour(color_map, (width, height))
+    plt.imshow(color_map / 255, alpha=0.5)
     return plot_to_image(figure, format=fmt)
 
 
@@ -137,8 +141,8 @@ def draw_classes_max_score_map(
         color_map[j, i] = score
 
     color_map = (np.clip(color_map, 0, 1) * 255).astype("uint8")
-    color_map = Image.fromarray(color_map).resize((height, width))
-    plt.imshow(np.array(color_map) / 255, alpha=0.5)
+    color_map = resize_nearest_neighbour(color_map, (width, height))
+    plt.imshow(color_map / 255, alpha=0.5)
     plt.colorbar()
     return plot_to_image(figure, format=fmt)
 
