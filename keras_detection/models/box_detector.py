@@ -171,9 +171,15 @@ class FPNKerasBoxDetector(BoxDetector):
             boxes = predictions["box_shape"][i].reshape([-1, 4])
             num_boxes = boxes.shape[0]
             objectness_scores = predictions["objectness"][i].reshape([-1])
-            classes_scores = predictions["classes"][i].reshape([num_boxes, -1])
-            labels = classes_scores.argmax(-1)
-            scores = self._scores_selection(objectness_scores, classes_scores.max(-1))
+            if "classes" in predictions:
+                classes_scores = predictions["classes"][i].reshape([num_boxes, -1])
+                labels = classes_scores.argmax(-1)
+                scores = self._scores_selection(objectness_scores, classes_scores.max(-1))
+            else:
+                labels = np.array([0]*num_boxes)
+                scores = objectness_scores
+                classes_scores = objectness_scores.reshape([num_boxes, 1])
+
             output = BoxDetectionOutput(
                 boxes=boxes,
                 scores=scores,
