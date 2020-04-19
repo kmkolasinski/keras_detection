@@ -2,7 +2,11 @@ from typing import Type, Union
 
 import tensorflow as tf
 
-from keras_detection.heads import SingleConvHeadFactory
+from keras_detection.heads import (
+    SingleConvHeadFactory,
+    SingleConvHead,
+    NoQuantizableSingleConvHead,
+)
 import keras_detection.losses as losses
 from keras_detection import metrics as m
 from keras_detection.tasks import PredictionTaskDef
@@ -35,6 +39,7 @@ def get_objectness_task(
     num_filters: int = 64,
     from_logits: bool = False,
     obj_class: Union[Type, str] = box_obj.BoxCenterObjectnessTarget,
+    quantizable: bool = True,
 ) -> PredictionTaskDef:
 
     if isinstance(obj_class, str):
@@ -51,6 +56,7 @@ def get_objectness_task(
             num_outputs=target.num_outputs,
             num_filters=num_filters,
             activation=activation,
+            htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
         ),
         loss=losses.BCELoss(
             target,
@@ -69,7 +75,10 @@ def get_objectness_task(
 
 
 def get_box_shape_task(
-    name: str = "box_shape", loss_weight: float = 10.0, num_filters: int = 64,
+    name: str = "box_shape",
+    loss_weight: float = 10.0,
+    num_filters: int = 64,
+    quantizable: bool = True,
 ) -> PredictionTaskDef:
     target = STANDARD_BOX_SHAPE_TARGETS[name]
     return PredictionTaskDef(
@@ -77,7 +86,10 @@ def get_box_shape_task(
         loss_weight=loss_weight,
         target_builder=target,
         head_factory=SingleConvHeadFactory(
-            num_outputs=target.num_outputs, num_filters=num_filters, activation=None,
+            num_outputs=target.num_outputs,
+            num_filters=num_filters,
+            activation=None,
+            htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
         ),
         loss=losses.L1Loss(target),
         metrics=[],
@@ -94,6 +106,7 @@ def get_multiclass_task(
     fl_alpha: float = 0.25,
     fl_gamma: float = 2.0,
     num_filters: int = 64,
+    quantizable: bool = True,
 ) -> PredictionTaskDef:
     target = MulticlassTarget(num_classes=num_classes)
     if activation == "sigmoid":
@@ -131,6 +144,7 @@ def get_multiclass_task(
             num_outputs=target.num_outputs,
             num_filters=num_filters,
             activation=activation,
+            htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
         ),
         loss=loss,
         metrics=[m.MulticlassAccuracyMetric(target)],

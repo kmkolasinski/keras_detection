@@ -102,15 +102,26 @@ class SingleConvHead(Head):
         return h
 
 
+class NoQuantizableSingleConvHead(SingleConvHead):
+    def forward(
+        self,
+        feature_map: (B, H, W, C),
+        is_training: bool = False,
+        quantized: bool = False,
+    ) -> tf.Tensor:
+        return super().forward(feature_map, is_training, quantized=False)
+
+
 class SingleConvHeadFactory(HeadFactory):
     def __init__(
         self,
         num_outputs: int,
         activation: Optional[str] = "relu",
         num_filters: int = 64,
+        htype: Type[SingleConvHead] = SingleConvHead,
     ):
         super().__init__(
-            SingleConvHead,
+            htype,
             num_outputs=num_outputs,
             activation=activation,
             num_filters=num_filters,

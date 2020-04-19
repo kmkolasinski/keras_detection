@@ -141,8 +141,9 @@ def residual_conv_block(
         bn_params = get_bn_params()
         conv_name, bn_name, relu_name, sc_name = handle_block_names(stage, block)
 
-        x = layers.BatchNormalization(name=bn_name + "1", **bn_params)(input_tensor)
-        x = layers.Activation("relu", name=relu_name + "1")(x)
+        # BN alone is not supported by the tfmot
+        # x = layers.BatchNormalization(name=bn_name + "1", **bn_params)(input_tensor)
+        x = layers.Activation("relu", name=relu_name + "1")(input_tensor)
 
         # defining shortcut connection
         if cut == "pre":
@@ -285,7 +286,8 @@ def CustomResNet(
     conv_params = get_conv_params()
 
     # resnet bottom
-    x = layers.BatchNormalization(name="bn_data", **no_scale_bn_params)(img_input)
+    x = layers.Conv2D(3, (1, 1), strides=(1, 1), name="conv0-pre", **conv_params)(img_input)
+    x = layers.BatchNormalization(name="bn_data", **no_scale_bn_params)(x)
     x = layers.ZeroPadding2D(padding=(3, 3))(x)
     x = layers.Conv2D(
         init_filters, (7, 7), strides=(2, 2), name="conv0", **conv_params
