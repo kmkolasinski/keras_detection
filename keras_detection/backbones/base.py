@@ -14,6 +14,10 @@ class Backbone(ABC):
         self._backbone: keras.Model = backbone
 
     @property
+    def backbone(self) -> keras.Model:
+        return self._backbone
+
+    @property
     def input_shape(self) -> Tuple[int, int, int]:
         return self._image_input_shape
 
