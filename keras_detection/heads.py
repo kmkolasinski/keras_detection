@@ -62,7 +62,7 @@ class HeadFactory:
         return self._htype(output_name=output_name, **self._kwargs)
 
 
-class IdentityHead(Head):
+class ActivationHead(Head):
     def __init__(self, output_name: str, num_outputs: int, activation: str = None):
         super().__init__(output_name=output_name, num_outputs=num_outputs)
         self.activation = activation

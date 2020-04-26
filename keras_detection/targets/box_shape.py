@@ -103,6 +103,27 @@ class BoxShapeTarget(FeatureMapPredictionTarget):
         return predictions
 
 
+@dataclass
+class MeanBoxSizeTarget(FeatureMapPredictionTarget):
+    @property
+    def num_outputs(self) -> int:
+        return 2
+
+    @property
+    def frame_required_fields(self) -> List[str]:
+        return ["boxes"]
+
+    def compute_targets(
+        self, fm_desc: FeatureMapDesc, batch_frame: LabelsFrame[tf.Tensor]
+    ) -> tf.Tensor:
+        return self.map_numpy_batch_compute_fn(
+            fm_desc,
+            batch_compute_mean_box_size_targets,
+            batch_frame.boxes,
+            batch_frame.num_rows,
+        )
+
+
 @jit(nopython=True)
 def batch_compute_box_size_targets(
     targets: np.ndarray, boxes: np.ndarray, num_rows: np.ndarray
@@ -178,3 +199,35 @@ def compute_box_shape_targets(
         box_shape_map[yi, xi, 3] = x * fm_width - xi
         box_shape_map[yi, xi, 4] = 1
     return box_shape_map
+
+
+@jit(nopython=True)
+def batch_compute_mean_box_size_targets(
+    targets: np.ndarray, boxes: np.ndarray, num_rows: np.ndarray
+) -> np.ndarray:
+    batch_size = targets.shape[0]
+    for i in range(batch_size):
+        compute_mean_box_size_targets(targets[i, :, :, :], boxes[i, : num_rows[i], :])
+    return targets
+
+
+@jit("float32[:,:,:](float32[:,:,:], float32[:,:])", nopython=True)
+def compute_mean_box_size_targets(hw_map: np.ndarray, boxes: np.ndarray) -> np.ndarray:
+
+    y_center, x_center = np_frame_ops.boxes_clipped_centers(boxes)
+    heights, widths = np_frame_ops.boxes_heights_widths(boxes)
+    fm_height, fm_width = hw_map.shape[:2]
+
+    for k, (y, x) in enumerate(zip(y_center, x_center)):
+        yi = int(y * fm_height)
+        xi = int(x * fm_width)
+
+        hw_map[yi, xi, 0] += heights[k] * fm_height
+        hw_map[yi, xi, 1] += widths[k] * fm_width
+        hw_map[yi, xi, 2] += 1
+
+    hw_map[:, :, :2] = hw_map[:, :, :2] / (hw_map[:, :, 2:] + 1e-6)
+    # make weights in range (0, 1)
+    hw_map[:, :, 2] = np.minimum(hw_map[:, :, 2], 1)
+
+    return hw_map

@@ -116,7 +116,7 @@ class SizeEstimatorBackboneTest(tf.test.TestCase):
             (image_dim, image_dim, 3),
             backbone.backbone,
             box_size_task= bse.get_mean_box_size_task(),
-            objectness_task=bse.get_objectness_task(num_scales=num_scales),
+            objectness_task=bse.get_objectness_task(),
             num_scales=num_scales
         )
 

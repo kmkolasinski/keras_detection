@@ -1,29 +1,18 @@
 from typing import Tuple, List
-
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
-
-from keras_detection import FPNBuilder, Backbone, FeatureMapDesc
-from keras_detection.tasks import PredictionTaskDef
-from keras_detection.utils.dvs import *
-import keras_detection.tasks as dt
-from typing import Type, Union
-
-import tensorflow as tf
-
-from keras_detection.heads import (
-    SingleConvHeadFactory,
-    SingleConvHead,
-    NoQuantizableSingleConvHead,
-    IdentityHead,
-    HeadFactory,
-)
 import keras_detection.losses as losses
-from keras_detection import metrics as m
-from keras_detection.tasks import PredictionTaskDef
-from keras_detection.targets.box_classes import MulticlassTarget
 import keras_detection.targets.box_objectness as box_obj
 import keras_detection.targets.box_shape as sh_target
+import keras_detection.tasks as dt
+from keras_detection import FPNBuilder, Backbone, FeatureMapDesc
+from keras_detection import metrics as m
+from keras_detection.heads import (
+    ActivationHead,
+    HeadFactory,
+)
+from keras_detection.tasks import PredictionTaskDef
+from keras_detection.utils.dvs import *
 
 keras = tf.keras
 LOGGER = tf.get_logger()
@@ -96,8 +85,8 @@ class SizeEstimatorBackbone(Backbone):
 
         mean_sizes = tf.identity(mean_sizes, name="mean_size")
 
-        weights_logits = tf.squeeze(weights_logits, axis=3)
-        weights_logits: (B, H, W, S) = tf.identity(
+        weights_logits = tf.reduce_sum(weights_logits, axis=-1)
+        weights_logits: (B, H, W, 1) = tf.identity(
             weights_logits, name="weights_logits"
         )
         return [mean_sizes, weights_logits]
@@ -151,12 +140,12 @@ def get_mean_box_size_task(
     name: str = "box_shape", loss_weight: float = 5.0
 ) -> PredictionTaskDef:
 
-    target = sh_target.BoxSizeTarget()
+    target = sh_target.MeanBoxSizeTarget()
     box_size = PredictionTaskDef(
         name=name,
         loss_weight=loss_weight,
         target_builder=target,
-        head_factory=HeadFactory(num_outputs=target.num_outputs, htype=IdentityHead),
+        head_factory=HeadFactory(num_outputs=target.num_outputs, htype=ActivationHead),
         loss=losses.L1Loss(target),
         metrics=[],
     )
@@ -164,23 +153,22 @@ def get_mean_box_size_task(
 
 
 def get_objectness_task(
-    num_scales: int,
     name: str = "objectness",
     loss_weight: float = 1.0,
-    label_smoothing: float = 0.01,
+    label_smoothing: float = 0.0,
     smooth_only_positives: bool = True,
     score_threshold: float = 0.3,
-    pos_weights: float = 5.0,
+    pos_weights: float = 1.0,
 ) -> PredictionTaskDef:
 
-    target = box_obj.BoxCenterObjectnessTarget(pos_weights=pos_weights, depth=num_scales)
+    target = box_obj.BoxCenterIgnoreMarginObjectnessTarget(pos_weights=pos_weights)
 
     objectness_task = PredictionTaskDef(
         name=name,
         loss_weight=loss_weight,
         target_builder=target,
         head_factory=HeadFactory(
-            num_outputs=target.num_outputs, activation="sigmoid", htype=IdentityHead
+            num_outputs=target.num_outputs, activation="sigmoid", htype=ActivationHead
         ),
         loss=losses.BCELoss(
             target,

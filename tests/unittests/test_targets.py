@@ -5,7 +5,7 @@ from keras_detection.targets.box_classes import MulticlassTarget
 from keras_detection.targets.box_objectness import BoxCenterObjectnessTarget, \
     SmoothBoxCenterObjectnessTarget, BoxCenterIgnoreMarginObjectnessTarget
 from keras_detection.targets.box_shape import BoxSizeTarget, BoxOffsetTarget, \
-    BoxShapeTarget
+    BoxShapeTarget, MeanBoxSizeTarget
 
 utils.maybe_enable_eager_mode()
 
@@ -121,5 +121,12 @@ class TargetsTest(tf.test.TestCase):
         self.assertAllClose(recon[0, 2, 1], [0.1, 0.3, 0.55, 0.45])
         self.assertAllClose(weights[0, 2, 1], [1.0])
 
+    def test_mean_box_size_target_builder(self):
+        image_data = self.sample_batch()
+        tb = MeanBoxSizeTarget()
+        targets = tb.get_targets_tensors(self.fm_desc, image_data.labels)
+        y_pred, weights = tb.to_targets_and_weights(targets)
+        self.assertEqual(y_pred.shape, [self.bs, *self.fm_size, 2])
+        self.assertEqual(weights.shape, [self.bs, *self.fm_size, 1])
 
 
