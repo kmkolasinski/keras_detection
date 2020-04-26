@@ -50,3 +50,10 @@ class Backbone(ABC):
         self, inputs: tf.Tensor, is_training: bool = False, quantized: bool = False
     ) -> List[tf.Tensor]:
         pass
+
+    def as_model(
+        self, is_training: bool = False, quantized: bool = False, name: str = "backbone"
+    ):
+        inputs = keras.Input(self.input_shape, name="image")
+        outputs = self.forward(inputs, is_training=is_training, quantized=quantized)
+        return keras.Model(inputs, outputs, name=name)

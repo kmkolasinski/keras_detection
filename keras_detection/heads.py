@@ -62,6 +62,28 @@ class HeadFactory:
         return self._htype(output_name=output_name, **self._kwargs)
 
 
+class IdentityHead(Head):
+    def __init__(self, output_name: str, num_outputs: int, activation: str = None):
+        super().__init__(output_name=output_name, num_outputs=num_outputs)
+        self.activation = activation
+
+    def build(
+        self, input_shape: Tuple[int, int, int], is_training: bool = False
+    ) -> keras.Model:
+        x = keras.layers.Input(shape=input_shape)
+        return keras.Model(x, x)
+
+    def forward(
+        self,
+        feature_map: (B, H, W, C),
+        is_training: bool = False,
+        quantized: bool = False,
+    ) -> tf.Tensor:
+
+        h = keras.layers.Activation(self.activation, name=self.output_name)(feature_map)
+        return h
+
+
 class SingleConvHead(Head):
     def __init__(
         self,

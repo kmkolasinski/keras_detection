@@ -336,7 +336,7 @@ class FPNBuilder:
         postprocess_outputs: bool = True,
         merge_feature_maps: bool = False,
         verify_converted_models: bool = True,
-        convert_quantized_model: bool = True,
+        convert_quantized_model: bool = False,
     ) -> Tuple[keras.Model, List[Path]]:
 
         dataset = None

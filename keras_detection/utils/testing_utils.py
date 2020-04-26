@@ -3,7 +3,7 @@ from typing import Tuple
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 import tensorflow as tf
 import numpy as np
-import keras_detection.datasets as datasets_ops
+import keras_detection.datasets.datasets_ops as datasets_ops
 
 
 def maybe_enable_eager_mode():

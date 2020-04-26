@@ -12,10 +12,11 @@ from keras_detection.structures import FeatureMapDesc, LabelsFrame
 class BoxCenterObjectnessTarget(FeatureMapPredictionTarget):
     pos_weights: float = 1.0
     from_logits: bool = False
+    depth: int = 1
 
     @property
     def num_outputs(self) -> int:
-        return 1
+        return self.depth
 
     @property
     def frame_required_fields(self) -> List[str]:
@@ -31,6 +32,7 @@ class BoxCenterObjectnessTarget(FeatureMapPredictionTarget):
             batch_frame.weights,
             batch_frame.num_rows,
             self.pos_weights,
+            self.num_outputs
         )
 
     def postprocess_predictions(
@@ -38,7 +40,11 @@ class BoxCenterObjectnessTarget(FeatureMapPredictionTarget):
     ) -> tf.Tensor:
         if self.from_logits:
             predictions = tf.nn.sigmoid(predictions)
-        scores = tf.squeeze(predictions, axis=-1)
+
+        if self.depth == 1:
+            scores = tf.squeeze(predictions, axis=-1)
+        else:
+            scores = tf.reduce_max(predictions, axis=-1)
         return scores
 
     def to_pos_neg_ignored_anchors(self, target: tf.Tensor) -> tf.Tensor:
@@ -54,6 +60,7 @@ def batch_compute_objectness_targets(
     weights: np.ndarray,
     num_rows: np.ndarray,
     pos_weights: float,
+    num_outputs: int,
 ) -> np.ndarray:
     batch_size = targets.shape[0]
     for i in range(batch_size):
@@ -61,24 +68,24 @@ def batch_compute_objectness_targets(
             targets[i, :, :, :],
             boxes[i, : num_rows[i], :],
             weights[i, : num_rows[i]],
-            pos_weights,
+            pos_weights, num_outputs
         )
     return targets
 
 
-@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32)", nopython=True)
+@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32, int32)", nopython=True)
 def compute_objectness_targets(
-    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float
+    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float, num_outputs: int
 ) -> np.ndarray:
 
     y_center, x_center = np_frame_ops.boxes_clipped_centers(boxes)
     fm_height, fm_width = targets.shape[:2]
-    targets[:, :, -1] = 1
+    targets[:, :, num_outputs] = 1
     for y, x, w in zip(y_center, x_center, weights):
         yi = int(y * fm_height)
         xi = int(x * fm_width)
-        targets[yi, xi, 0] = 1
-        targets[yi, xi, 1] = pos_weights * w
+        targets[yi, xi, :num_outputs] = 1
+        targets[yi, xi, num_outputs] = pos_weights * w
     return targets
 
 
@@ -94,6 +101,7 @@ class SmoothBoxCenterObjectnessTarget(BoxCenterObjectnessTarget):
             batch_frame.weights,
             batch_frame.num_rows,
             self.pos_weights,
+            self.num_outputs
         )
 
 
@@ -104,6 +112,7 @@ def batch_compute_smooth_objectness_targets(
     weights: np.ndarray,
     num_rows: np.ndarray,
     pos_weights: float,
+    num_outputs: int
 ) -> np.ndarray:
     batch_size = targets.shape[0]
     for i in range(batch_size):
@@ -111,20 +120,20 @@ def batch_compute_smooth_objectness_targets(
             targets[i, :, :, :],
             boxes[i, : num_rows[i], :],
             weights[i, : num_rows[i]],
-            pos_weights,
+            pos_weights, num_outputs
         )
     return targets
 
 
-@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32)", nopython=True)
+@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32, int32)", nopython=True)
 def compute_smooth_objectness_targets(
-    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float
+    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float, num_outputs: int
 ) -> np.ndarray:
 
     y_center, x_center = np_frame_ops.boxes_clipped_centers(boxes)
     fm_h, fm_w = targets.shape[:2]
 
-    targets[:, :, 1] = 1
+    targets[:, :, num_outputs] = 1
     for y, x, w in zip(y_center, x_center, weights):
         yi = int(y * fm_h)
         xi = int(x * fm_w)
@@ -134,8 +143,8 @@ def compute_smooth_objectness_targets(
                 x_offset = x * fm_w - i
                 if 0 <= j < fm_h and 0 <= i < fm_w:
                     delta = -0.5 * (y_offset ** 2 + x_offset ** 2)
-                    targets[j, i, 0] = np.exp(delta)
-                    targets[j, i, 1] = pos_weights * w
+                    targets[j, i, :num_outputs] = np.exp(delta)
+                    targets[j, i, num_outputs] = pos_weights * w
 
     return targets
 
@@ -152,6 +161,7 @@ class BoxCenterIgnoreMarginObjectnessTarget(BoxCenterObjectnessTarget):
             batch_frame.weights,
             batch_frame.num_rows,
             self.pos_weights,
+            self.num_outputs
         )
 
     def to_pos_neg_ignored_anchors(self, target: tf.Tensor) -> tf.Tensor:
@@ -165,6 +175,7 @@ def batch_compute_ignore_margin_objectness_targets(
     weights: np.ndarray,
     num_rows: np.ndarray,
     pos_weights: float,
+    num_outputs: int
 ) -> np.ndarray:
     batch_size = targets.shape[0]
     for i in range(batch_size):
@@ -172,27 +183,33 @@ def batch_compute_ignore_margin_objectness_targets(
             targets[i, :, :, :],
             boxes[i, : num_rows[i], :],
             weights[i, : num_rows[i]],
-            pos_weights,
+            pos_weights, num_outputs
         )
     return targets
 
 
-@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32)", nopython=True)
+@jit("float32[:,:,:](float32[:,:,:], float32[:,:], float32[:], float32, int32)", nopython=True)
 def compute_ignore_margin_objectness_targets(
-    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float
+    targets: np.ndarray, boxes: np.ndarray, weights: np.ndarray, pos_weights: float, num_outputs: int
 ) -> np.ndarray:
 
     y_center, x_center = np_frame_ops.boxes_clipped_centers(boxes)
     fm_h, fm_w = targets.shape[:2]
-    targets[:, :, -1] = 1
+    targets[:, :, num_outputs] = 1
+
+    for y, x, w in zip(y_center, x_center, weights):
+        yi = int(y * fm_h)
+        xi = int(x * fm_w)
+        targets[yi, xi, :num_outputs] = 1
+        targets[yi, xi, num_outputs] = pos_weights * w
+
     for y, x, w in zip(y_center, x_center, weights):
         yi = int(y * fm_h)
         xi = int(x * fm_w)
         for j in [yi - 1, yi, yi + 1]:
             for i in [xi - 1, xi, xi + 1]:
                 if 0 <= j < fm_h and 0 <= i < fm_w:
-                    targets[j, i, 1] = 0
+                    if targets[j, i, 0] != 1:
+                        targets[j, i, num_outputs] = 0
 
-        targets[yi, xi, 0] = 1
-        targets[yi, xi, 1] = pos_weights * w
     return targets
