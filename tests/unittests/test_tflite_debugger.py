@@ -74,7 +74,9 @@ class DebugKerasModelTest(tf.test.TestCase):
 
         self.assertEqual(len(debug_model.outputs), 17)
         # quantized model has one mode layer just after input layer
-        self.assertEqual(len(debug_qaware_model.outputs), 18)
+        self.assertEqual(len(debug_qaware_model.outputs), 17)
+
+        TFLiteModel.from_keras_model(debug_qaware_model)
 
     def test_convert_to_tflite_debug_model(self):
 

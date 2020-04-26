@@ -18,6 +18,7 @@ class DiffMetrics:
     SE = "se"
     MAE = "mae"
     MSE = "mse"
+    L_INF = "L_inf"
     PER_CHANNEL_MAE = "per_channel_mae"
     PER_CHANNEL_MSE = "per_channel_mse"
 
@@ -174,7 +175,10 @@ def diff_quantiztion_outputs(
         ko = ko.reshape(sh)
         to = to.reshape(sh)
 
+        linf = np.abs(ko - to).reshape([sh[0], -1]).max(-1)
+        # TODO Check metrics correctness
         metrics = {
+            DiffMetrics.L_INF: linf.mean(),
             DiffMetrics.MAE: np.abs(ko - to).mean(0).mean(),
             DiffMetrics.MSE: np.square(ko - to).mean(0).mean(),
             DiffMetrics.AE: np.abs(ko - to).mean(0).sum(),
