@@ -87,7 +87,7 @@ class FPNBuilder:
     def check_built(self):
         assert self.built, "Model not built. Call build() function first!"
 
-    def build_backbone(self, batch_size: int, is_training: bool, quantized: bool):
+    def build_backbone(self, batch_size: Optional[int], is_training: bool, quantized: bool):
 
         input_image = keras.Input(
             shape=self.input_shape, name="image", batch_size=batch_size

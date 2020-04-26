@@ -13,6 +13,9 @@ class Backbone(ABC):
         self._image_input_shape = input_shape
         self._backbone: keras.Model = backbone
 
+    def get_input_tensor(self) -> tf.Tensor:
+        return self._backbone.input
+
     @property
     def backbone(self) -> keras.Model:
         return self._backbone

@@ -266,10 +266,10 @@ def CustomResNet(
     """
 
     if input_tensor is None:
-        img_input = layers.Input(shape=input_shape, name="data")
+        img_input = layers.Input(shape=input_shape, name="image")
     else:
         if not backend.is_keras_tensor(input_tensor):
-            img_input = layers.Input(tensor=input_tensor, shape=input_shape)
+            img_input = layers.Input(tensor=input_tensor, shape=input_shape, name="image")
         else:
             img_input = input_tensor
 

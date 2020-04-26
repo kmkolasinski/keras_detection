@@ -10,6 +10,52 @@ import pandas as pd
 
 
 class DebugKerasModelTest(tf.test.TestCase):
+    def test_custom_model_to_debug(self):
+
+        image_dim = 64
+        backbone = resnet.ResNetBackbone(
+            input_shape=(image_dim, image_dim, 3),
+            units_per_block=(1,),
+            num_last_blocks=1,
+        )
+
+        model = backbone.backbone
+
+        inputs = model.input / 255.0
+
+        custom_model = tf.keras.Model(inputs=model.input, outputs=model(inputs))
+        debug_model = tflite_debugger.convert_to_debug_model(custom_model)
+        self.assertEqual(len(debug_model.output_names), 18)
+
+        input_image = tf.keras.Input(
+            shape=(image_dim, image_dim, 3), name="input_image"
+        )
+        outputs = model(input_image)
+        custom_model = tf.keras.Model(inputs=input_image, outputs=outputs)
+        debug_model = tflite_debugger.convert_to_debug_model(custom_model)
+
+        self.assertEqual(len(debug_model.output_names), 17) # no normalization layer
+
+    def test_custom_model_to_debug_quantized(self):
+
+        image_dim = 64
+        backbone = resnet.ResNetBackbone(
+            input_shape=(image_dim, image_dim, 3),
+            units_per_block=(1,),
+            num_last_blocks=1,
+        )
+
+        input_image = tf.keras.Input(
+            shape=(image_dim, image_dim, 3), name="input_image"
+        )
+        outputs = backbone.forward(input_image, quantized=True)
+        custom_model = tf.keras.Model(inputs=input_image, outputs=outputs)
+        debug_model = tflite_debugger.convert_to_debug_model(custom_model)
+        debug_model.summary()
+
+        debug_tflite_model = TFLiteModel.from_keras_model(debug_model)
+        print(debug_tflite_model.output_names)
+
     def test_convert_to_debug_model(self):
 
         image_dim = 64
@@ -26,7 +72,9 @@ class DebugKerasModelTest(tf.test.TestCase):
         debug_model = tflite_debugger.convert_to_debug_model(model)
         debug_qaware_model = tflite_debugger.convert_to_debug_model(qaware_model)
 
-        self.assertEqual(len(debug_model.outputs), len(debug_qaware_model.outputs))
+        self.assertEqual(len(debug_model.outputs), 17)
+        # quantized model has one mode layer just after input layer
+        self.assertEqual(len(debug_qaware_model.outputs), 18)
 
     def test_convert_to_tflite_debug_model(self):
 
@@ -55,9 +103,7 @@ class DebugKerasModelTest(tf.test.TestCase):
         inputs = np.random.rand(*[1, image_dim, image_dim, 3])
 
         output_diffs = tflite_debugger.diff_quantiztion_outputs(
-            inputs,
-            keras_model=debug_keras_model,
-            tflite_model=debug_tflite_model
+            inputs, keras_model=debug_keras_model, tflite_model=debug_tflite_model
         )
         self.assertEqual(len(output_diffs), len(debug_tflite_model.output_names))
 
@@ -69,10 +115,11 @@ class DebugKerasModelTest(tf.test.TestCase):
         output_diffs = tflite_debugger.debug_models_quantization(
             representative_dataset(),
             keras_model=debug_keras_model,
-            tflite_model=debug_tflite_model, max_samples=2
+            tflite_model=debug_tflite_model,
+            max_samples=2,
         )
         self.assertEqual(len(output_diffs), len(debug_tflite_model.output_names))
-        self.assertEqual(len(output_diffs[0].metrics['mae']), 2)
+        self.assertEqual(len(output_diffs[0].metrics["mae"]), 2)
 
 
 class OutputDiffTest(tf.test.TestCase):
@@ -92,4 +139,3 @@ class OutputDiffTest(tf.test.TestCase):
         df = pd.DataFrame(df)
         df = df.set_index("left_name")
         self.assertEqual(df.shape, (2, 5))
-

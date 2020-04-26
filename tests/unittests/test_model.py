@@ -9,8 +9,8 @@ from keras_detection import ImageData
 from keras_detection.backbones import resnet
 from keras_detection.backbones.simple_cnn import SimpleCNNBackbone
 from keras_detection.tasks import standard_tasks
-
-utils.maybe_enable_eager_mode()
+from keras_detection.utils import tflite_debugger
+import numpy as np
 
 
 def aug_fn(image_data: ImageData) -> ImageData:
@@ -64,7 +64,9 @@ class BuilderTest(tf.test.TestCase):
             postprocess_outputs=True,
         )
 
-        qmodel = builder.build_quantized(non_quantized_model_weights=f"{self.test_dir}/model.h5")
+        qmodel = builder.build_quantized(
+            non_quantized_model_weights=f"{self.test_dir}/model.h5"
+        )
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, beta_2=0.99)
         qmodel.compile(optimizer, **builder.get_model_compile_args())
         qmodel.fit(prepared_train_dataset, epochs=1, steps_per_epoch=5)
@@ -140,15 +142,61 @@ class BuilderTest(tf.test.TestCase):
 
         image_dim = 64
         backbone = SimpleCNNBackbone(
-            input_shape=(image_dim, image_dim, 3),
-            init_filters=16,
-            num_last_blocks=1,
+            input_shape=(image_dim, image_dim, 3), init_filters=16, num_last_blocks=1
         )
         tasks = [
             standard_tasks.get_objectness_task(),
             standard_tasks.get_box_shape_task(),
-            standard_tasks.get_multiclass_task(num_classes=10, fl_gamma=0, activation='softmax'),
+            standard_tasks.get_multiclass_task(
+                num_classes=10, fl_gamma=0, activation="softmax"
+            ),
         ]
 
         builder = FPNBuilder(backbone=backbone, tasks=tasks)
         self.train_export_model(builder)
+
+
+class TFLiteDebuggerTest(tf.test.TestCase):
+    def test_debug_quantized_model(self):
+
+        image_dim = 64
+        backbone = resnet.ResNetBackbone(
+            input_shape=(image_dim, image_dim, 3),
+            units_per_block=(1, 1),
+            num_last_blocks=2,
+        )
+        tasks = [standard_tasks.get_objectness_task()]
+
+        builder = FPNBuilder(backbone=backbone, tasks=tasks)
+        builder.build()
+
+        image_dim = builder.input_shape[1]
+        raw_dataset = datasets_ops.from_numpy_generator(
+            utils.create_fake_detection_dataset_generator(num_steps=100)
+        )
+
+        train_dataset = datasets_ops.prepare_dataset(
+            raw_dataset,
+            model_image_size=(image_dim, image_dim),
+            augmentation_fn=aug_fn,
+            num_epochs=-1,
+            batch_size=2,
+            shuffle_buffer_size=1,
+            prefetch_buffer_size=1,
+        )
+        prepared_train_dataset = train_dataset.map(
+            builder.get_build_training_targets_fn()
+        )
+
+        def representative_dataset():
+            for features, labels in prepared_train_dataset:
+                for image in features["image"]:
+                    yield np.expand_dims(image, 0)
+
+
+        quantized_model = builder.build_quantized()
+
+        outputs_diffs = tflite_debugger.debug_model_quantization(
+            representative_dataset(), quantized_model, max_samples=1
+        )
+        print(outputs_diffs)

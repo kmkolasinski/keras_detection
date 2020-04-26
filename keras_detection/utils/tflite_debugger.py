@@ -84,6 +84,9 @@ def get_model_layers(model: keras.Model) -> List[layers.Layer]:
 def convert_to_debug_model(model: keras.Model) -> keras.Model:
 
     model_layers = get_model_layers(model)
+    outputs = []
+    for l in model_layers:
+        outputs.append(l.output)
 
     # TODO when working with Quantized model for some
     #   reason Model(..., outputs=[...]) raises ValueError
@@ -94,14 +97,15 @@ def convert_to_debug_model(model: keras.Model) -> keras.Model:
         try:
             debug_model = keras.Model(
                 inputs=model.inputs,
-                outputs=[l.output for l in model_layers[start_idx:]],
+                outputs=[o for o in outputs[start_idx:]],
                 name="debug",
             )
             break
-        except ValueError:
+        except ValueError as e:
             print(
                 f"Cannot create debug model. "
-                f"Invalid layer at index {start_idx} '{model_layers[start_idx].name}'. Trying to skip it!"
+                f"Invalid layer at index {start_idx} '{model_layers[start_idx].name}'. "
+                f"Trying to skip it! Error: {e}"
             )
             start_idx += 1
 
@@ -227,6 +231,11 @@ def debug_model_quantization(
     max_samples: Optional[int] = 16,
     optimizations: Optional[List[tf.lite.Optimize]] = None
 ) -> List[OutputDiff]:
+
+    keras_model = convert_to_debug_model(keras_model)
+
+    if keras_model is None:
+        raise ValueError("Couldn't create debug model!")
 
     tflite_model = TFLiteModel.from_keras_model(keras_model, optimizations=optimizations)
 
