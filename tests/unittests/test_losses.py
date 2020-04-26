@@ -58,6 +58,23 @@ class LossesTest(tf.test.TestCase):
         loss = l1_loss(y_true=targets, y_pred=predictions)
         self.assertEqual(loss.shape, [])
 
+    def test_centered_boxes_iou_loss(self):
+
+        image_data = self.sample_batch()
+        tb = BoxSizeTarget()
+        targets = tb.get_targets_tensors(self.fm_desc, image_data.labels)
+        predictions = utils.create_fake_boxes_map(targets[..., :-1])
+        predictions = tf.math.sigmoid(predictions)
+        self.assertEqual(predictions.shape, [self.bs, *self.fm_size, 2])
+
+        iou_loss = losses.CenteredBoxesIOULoss(target_def=tb)
+        loss = iou_loss(y_true=targets, y_pred=predictions)
+        self.assertEqual(loss.shape, [])
+        self.assertGreater(loss, 0.0)
+
+        loss = iou_loss(y_true=targets, y_pred=targets[..., :2])
+        self.assertLess(loss, 1e-6)
+
     def test_bce_focal_loss(self):
         image_data = self.sample_batch()
         tb = MulticlassTarget(num_classes=10)

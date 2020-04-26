@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Type
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
 import keras_detection.losses as losses
@@ -7,10 +7,7 @@ import keras_detection.targets.box_shape as sh_target
 import keras_detection.tasks as dt
 from keras_detection import FPNBuilder, Backbone, FeatureMapDesc
 from keras_detection import metrics as m
-from keras_detection.heads import (
-    ActivationHead,
-    HeadFactory,
-)
+from keras_detection.heads import ActivationHead, HeadFactory
 from keras_detection.tasks import PredictionTaskDef
 from keras_detection.utils.dvs import *
 
@@ -137,7 +134,9 @@ class BoxSizeEstimatorBuilder(FPNBuilder):
 
 
 def get_mean_box_size_task(
-    name: str = "box_shape", loss_weight: float = 5.0
+    name: str = "box_shape",
+    loss_weight: float = 1.0,
+    loss_cls: Type[losses.FeatureMapPredictionTargetLoss] = losses.CenteredBoxesIOULoss,
 ) -> PredictionTaskDef:
 
     target = sh_target.MeanBoxSizeTarget()
@@ -146,7 +145,7 @@ def get_mean_box_size_task(
         loss_weight=loss_weight,
         target_builder=target,
         head_factory=HeadFactory(num_outputs=target.num_outputs, htype=ActivationHead),
-        loss=losses.L1Loss(target),
+        loss=loss_cls(target),
         metrics=[],
     )
     return box_size
