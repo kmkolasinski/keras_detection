@@ -1,23 +1,97 @@
-from argparse import ArgumentError
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from pprint import pprint
-from typing import List, Union, Iterator, Dict, Optional
+from typing import List, Union, Dict, Optional, Any
 
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
 
 # See https://github.com/tensorflow/tensorflow/issues/32180
 # once this issue will be fixed I can use tf.lite.TFLiteConverter.from_keras_model
-from tqdm import tqdm
-
 from keras_detection.utils.tflite_converter_shitfix import from_keras_model
 
 LOGGER = tf.get_logger()
 keras = tf.keras
 TFLITE_SUFFIX = ".tflite"
 QUANTIZED_TFLITE_SUFFIX = ".quantized.tflite"
+
+
+class TFLiteModel:
+    def __init__(self, tflite_model: Union[bytes, str, Path]):
+        self.tflite_model = tflite_model
+        interpreter, predict_fn = create_tflite_predict_fn(tflite_model)
+        self.interpreter = interpreter
+        self.predict_fn = predict_fn
+
+    @classmethod
+    def from_keras_model(cls, model: keras.Model) -> 'TFLiteModel':
+        return cls(convert_default(model))
+
+    def get_details(self, inputs: bool, key: str) -> List[Any]:
+        if inputs:
+            details = self.interpreter.get_input_details()
+        else:
+            details = self.interpreter.get_output_details()
+        return [d[key] for d in details]
+
+    @property
+    def output_names(self) -> List[str]:
+        return self.get_details(inputs=False, key="name")
+
+    @property
+    def input_names(self) -> List[str]:
+        return self.get_details(inputs=True, key="name")
+
+    @property
+    def output_shapes(self) -> List[np.ndarray]:
+        return self.get_details(inputs=False, key="shape")
+
+    @property
+    def input_shapes(self) -> List[np.ndarray]:
+        return self.get_details(inputs=True, key="shape")
+
+    @property
+    def output_dtypes(self) -> List[np.dtype]:
+        return self.get_details(inputs=False, key="dtype")
+
+    @property
+    def input_dtypes(self) -> List[np.dtype]:
+        return self.get_details(inputs=True, key="dtype")
+
+    def validate_inputs(self, inputs: List[np.ndarray]):
+        input_details = self.interpreter.get_input_details()
+        validated_inputs = []
+        if len(input_details) != len(inputs):
+            raise ValueError(
+                f"Invalid number of input arguments. Expected {len(inputs)}, "
+                f"but got {len(input_details)}. Model input details: {input_details}"
+            )
+        for v, detail in zip(inputs, input_details):
+            v = np.array(v)
+
+            if v.dtype == np.float64 and detail["dtype"] == np.float32:
+                v = v.astype(np.float32)
+
+            if list(v.shape) != detail["shape"].tolist():
+                raise ValueError(
+                    f"Invalid input shape for '{detail['name']}'. "
+                    f"Expected {detail['shape']}, but got: {v.shape}"
+                )
+            if v.dtype != detail["dtype"]:
+
+                raise ValueError(
+                    f"Invalid input dtype for '{detail['name']}'. "
+                    f"Expected {detail['dtype']}, but got: {v.dtype}"
+                )
+
+            validated_inputs.append(v)
+        return validated_inputs
+
+    def predict(self, *inputs: List[np.ndarray]) -> Dict[str, np.ndarray]:
+        inputs = self.validate_inputs(inputs)
+        return self.predict_fn(inputs)
 
 
 def convert_default(model: keras.Model) -> bytes:
