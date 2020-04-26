@@ -100,15 +100,14 @@ def convert_default(
     model: keras.Model, optimizations: Optional[List[tf.lite.Optimize]] = None
 ) -> bytes:
 
-    LOGGER.info("Building TFLite model from Keras Model")
+    if optimizations is None:
+        optimizations = [tf.lite.Optimize.DEFAULT]
+
+    LOGGER.info(f"Building TFLite model from Keras Model using optimizations: {optimizations}")
     converter = from_keras_model(model)
     converter.experimental_new_converter = True
     converter.experimental_new_quantizer = True
-
-    if optimizations is None:
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    else:
-        converter.optimizations = optimizations
+    converter.optimizations = optimizations
 
     return converter.convert()
 
