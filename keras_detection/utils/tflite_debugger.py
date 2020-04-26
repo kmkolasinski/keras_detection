@@ -10,6 +10,7 @@ from keras_detection.structures import DataClass
 
 keras = tf.keras
 layers = tf.keras.layers
+LOGGER = tf.get_logger()
 
 
 class DiffMetrics:
@@ -200,6 +201,7 @@ def debug_models_quantization(
 
     outputs_diffs = []
     for k, inputs in enumerate(representative_dataset):
+        LOGGER.info(f"[{k}] Running predictions ... ")
         if max_samples is not None and k >= max_samples:
             break
 
@@ -223,9 +225,10 @@ def debug_model_quantization(
     keras_model: keras.Model,
     name_match_fn: Optional[Callable[[str, str], bool]] = None,
     max_samples: Optional[int] = 16,
+    optimizations: Optional[List[tf.lite.Optimize]] = None
 ) -> List[OutputDiff]:
 
-    tflite_model = TFLiteModel.from_keras_model(keras_model)
+    tflite_model = TFLiteModel.from_keras_model(keras_model, optimizations=optimizations)
 
     return debug_models_quantization(
         representative_dataset=representative_dataset,

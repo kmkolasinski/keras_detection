@@ -26,8 +26,10 @@ class TFLiteModel:
         self.predict_fn = predict_fn
 
     @classmethod
-    def from_keras_model(cls, model: keras.Model) -> 'TFLiteModel':
-        return cls(convert_default(model))
+    def from_keras_model(
+        cls, model: keras.Model, optimizations: Optional[List[tf.lite.Optimize]] = None
+    ) -> "TFLiteModel":
+        return cls(convert_default(model, optimizations=optimizations))
 
     def get_details(self, inputs: bool, key: str) -> List[Any]:
         if inputs:
@@ -94,11 +96,20 @@ class TFLiteModel:
         return self.predict_fn(inputs)
 
 
-def convert_default(model: keras.Model) -> bytes:
+def convert_default(
+    model: keras.Model, optimizations: Optional[List[tf.lite.Optimize]] = None
+) -> bytes:
+
+    LOGGER.info("Building TFLite model from Keras Model")
     converter = from_keras_model(model)
     converter.experimental_new_converter = True
     converter.experimental_new_quantizer = True
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    if optimizations is None:
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    else:
+        converter.optimizations = optimizations
+
     return converter.convert()
 
 
