@@ -30,6 +30,32 @@ class BoxSizeTarget(FeatureMapPredictionTarget):
             batch_frame.num_rows,
         )
 
+    def postprocess_predictions(
+        self, fm_desc: FeatureMapDesc, predictions: tf.Tensor
+    ) -> tf.Tensor:
+
+        shift_map = np.zeros([1, fm_desc.fm_height, fm_desc.fm_width, 4]).astype(
+            np.float32
+        )
+        fm_scale_map = np.ones([1, fm_desc.fm_height, fm_desc.fm_width, 4]).astype(
+            np.float32
+        )
+
+        for i in range(fm_desc.fm_height):
+            for j in range(fm_desc.fm_width):
+                shift_map[0, i, j, 2] = i + 0.5
+                shift_map[0, i, j, 3] = j + 0.5
+                fm_scale_map[0, i, j, 0] = fm_desc.fm_height
+                fm_scale_map[0, i, j, 1] = fm_desc.fm_width
+                fm_scale_map[0, i, j, 2] = fm_desc.fm_height
+                fm_scale_map[0, i, j, 3] = fm_desc.fm_width
+
+        offsets_predictions = tf.zeros_like(predictions)
+        predictions = tf.concat([predictions, offsets_predictions], axis=-1)
+
+        predictions = (predictions + shift_map) / fm_scale_map
+        return predictions
+
 
 @dataclass
 class BoxOffsetTarget(FeatureMapPredictionTarget):
@@ -104,14 +130,7 @@ class BoxShapeTarget(FeatureMapPredictionTarget):
 
 
 @dataclass
-class MeanBoxSizeTarget(FeatureMapPredictionTarget):
-    @property
-    def num_outputs(self) -> int:
-        return 2
-
-    @property
-    def frame_required_fields(self) -> List[str]:
-        return ["boxes"]
+class MeanBoxSizeTarget(BoxSizeTarget):
 
     def compute_targets(
         self, fm_desc: FeatureMapDesc, batch_frame: LabelsFrame[tf.Tensor]
