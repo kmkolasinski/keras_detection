@@ -81,21 +81,17 @@ class L1Loss(FeatureMapPredictionTargetLoss):
 
 
 class CenteredBoxesIOULoss(FeatureMapPredictionTargetLoss):
-
     def compute_loss(
         self, y_true: (B, H, W, 2), y_pred: (B, H, W, 2), weights: (B, H, W, 1)
     ) -> tf.Tensor:
 
         fm_height, fm_width = y_pred.shape[1:3]
 
-        area_pred = y_pred[..., 0] * y_pred[..., 1]
-        area_true = y_true[..., 0] * y_true[..., 1]
+        max_value: (B, H, W) = tf.maximum(y_true, y_pred) + 1e-6
 
-        max_area: (B, H, W) = tf.maximum(area_true, area_pred) + 1e-6
-
-        iou = tf.minimum(area_true, area_pred) / max_area
+        iou = tf.minimum(y_true, y_pred) / max_value
         iou = tf.clip_by_value(iou, 1e-5, 1.0)
-        log_loss_iou = - tf.math.log(iou) * tf.reshape(weights, [-1, fm_height, fm_width])
+        log_loss_iou = -weights * tf.math.log(iou)
 
         loss: (B, H * W) = tf.reshape(log_loss_iou, [-1, fm_height * fm_width])
         loss: (B,) = tf.reduce_mean(loss, -1)
