@@ -65,9 +65,9 @@ class SizeEstimatorBackbone(Backbone):
                 sf = 2 ** scale
 
                 outputs = backbone(inputs)
-                LOGGER.info(f"Processing scale: input shape = {inputs.shape} output shape = {outputs.shape}")
                 if not isinstance(outputs, tf.Tensor):
                     outputs = outputs[-1]
+                LOGGER.info(f"Processing scale: input shape = {inputs.shape} output shape = {outputs.shape}")
 
                 scales_outputs.append(sf * self.project(outputs, self.size_projection))
                 weights_outputs.append(self.project(outputs, self.weight_projection))
