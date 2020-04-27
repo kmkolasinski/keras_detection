@@ -1,14 +1,15 @@
-from typing import Tuple, List, Type
-
+from typing import Tuple, List, Type, Union
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
-
 import keras_detection.losses as losses
+import keras_detection.targets.box_objectness as box_obj
 import keras_detection.targets.box_shape as sh_target
 import keras_detection.tasks as dt
 from keras_detection import FPNBuilder, Backbone, FeatureMapDesc
+from keras_detection import metrics as m
 from keras_detection.heads import ActivationHead, HeadFactory
 from keras_detection.tasks import PredictionTaskDef
+from keras_detection.tasks.standard_tasks import STANDARD_BOX_OBJECTNESS_TARGET_TYPE
 from keras_detection.utils.dvs import *
 
 keras = tf.keras
@@ -150,3 +151,40 @@ def get_mean_box_size_task(
         metrics=[],
     )
     return box_size
+
+
+def get_objectness_task(
+    name: str = "objectness",
+    loss_weight: float = 1.0,
+    label_smoothing: float = 0.0,
+    smooth_only_positives: bool = True,
+    score_threshold: float = 0.3,
+    pos_weights: float = 1.0,
+    obj_class: Union[Type, str] = box_obj.BoxCenterIgnoreMarginObjectnessTarget,
+) -> PredictionTaskDef:
+
+    if isinstance(obj_class, str):
+        obj_class = STANDARD_BOX_OBJECTNESS_TARGET_TYPE[obj_class]
+
+    target = obj_class(pos_weights=pos_weights, from_logits=False)
+
+    objectness_task = PredictionTaskDef(
+        name=name,
+        loss_weight=loss_weight,
+        target_builder=target,
+        head_factory=HeadFactory(
+            num_outputs=target.num_outputs, activation="sigmoid", htype=ActivationHead
+        ),
+        loss=losses.BCELoss(
+            target,
+            label_smoothing=label_smoothing,
+            smooth_only_positives=smooth_only_positives,
+        ),
+        metrics=[
+            m.ObjectnessPrecision(target, score_threshold=score_threshold),
+            m.ObjectnessRecall(target, score_threshold=score_threshold),
+            m.ObjectnessPositivesMeanScore(target),
+            m.ObjectnessNegativesMeanScore(target),
+        ],
+    )
+    return objectness_task
