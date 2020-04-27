@@ -1,12 +1,12 @@
 from typing import Tuple, List, Type
+
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
+
 import keras_detection.losses as losses
-import keras_detection.targets.box_objectness as box_obj
 import keras_detection.targets.box_shape as sh_target
 import keras_detection.tasks as dt
 from keras_detection import FPNBuilder, Backbone, FeatureMapDesc
-from keras_detection import metrics as m
 from keras_detection.heads import ActivationHead, HeadFactory
 from keras_detection.tasks import PredictionTaskDef
 from keras_detection.utils.dvs import *
@@ -62,8 +62,9 @@ class SizeEstimatorBackbone(Backbone):
             for scale in range(self.num_scales):
 
                 sf = 2 ** scale
-                LOGGER.info(f"Processing scale: {inputs}")
+
                 outputs = backbone(inputs)
+                LOGGER.info(f"Processing scale: input shape = {inputs.shape} output shape = {outputs.shape}")
                 if not isinstance(outputs, tf.Tensor):
                     outputs = outputs[-1]
 
@@ -82,7 +83,7 @@ class SizeEstimatorBackbone(Backbone):
 
         mean_sizes = tf.identity(mean_sizes, name="mean_size")
 
-        weights_logits = tf.reduce_sum(weights_logits, axis=-1)
+        weights_logits = tf.reduce_max(weights_logits, axis=-1)
         weights_logits: (B, H, W, 1) = tf.identity(
             weights_logits, name="weights_logits"
         )
@@ -149,36 +150,3 @@ def get_mean_box_size_task(
         metrics=[],
     )
     return box_size
-
-
-def get_objectness_task(
-    name: str = "objectness",
-    loss_weight: float = 1.0,
-    label_smoothing: float = 0.0,
-    smooth_only_positives: bool = True,
-    score_threshold: float = 0.3,
-    pos_weights: float = 1.0,
-) -> PredictionTaskDef:
-
-    target = box_obj.BoxCenterIgnoreMarginObjectnessTarget(pos_weights=pos_weights)
-
-    objectness_task = PredictionTaskDef(
-        name=name,
-        loss_weight=loss_weight,
-        target_builder=target,
-        head_factory=HeadFactory(
-            num_outputs=target.num_outputs, activation="sigmoid", htype=ActivationHead
-        ),
-        loss=losses.BCELoss(
-            target,
-            label_smoothing=label_smoothing,
-            smooth_only_positives=smooth_only_positives,
-        ),
-        metrics=[
-            m.ObjectnessPrecision(target, score_threshold=score_threshold),
-            m.ObjectnessRecall(target, score_threshold=score_threshold),
-            m.ObjectnessPositivesMeanScore(target),
-            m.ObjectnessNegativesMeanScore(target),
-        ],
-    )
-    return objectness_task
