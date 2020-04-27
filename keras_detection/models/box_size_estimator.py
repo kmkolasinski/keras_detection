@@ -26,11 +26,14 @@ class SizeEstimatorBackbone(Backbone):
     ):
         super().__init__(base_backbone, input_shape)
         self.num_scales = num_scales
-        self.output_size = output_size
-        self.size_projection = keras.layers.Conv2D(
-            2, (1, 1), activation="sigmoid", name="size"
+
+        self.size_proj = ProjectionResizeConv2DLayer(
+            2, activation="sigmoid", name="size", output_size=output_size
         )
-        self.weight_projection = keras.layers.Conv2D(1, (1, 1), name="weight")
+        self.weight_proj = ProjectionResizeConv2DLayer(
+            1, name="weight_projection", output_size=output_size
+        )
+        self.scale_merger = MergeScalesLayer()
 
     @property
     def num_fm_maps(self) -> int:
@@ -45,12 +48,6 @@ class SizeEstimatorBackbone(Backbone):
             )
             return tfmot.quantization.keras.quantize_model(self.backbone)
 
-    def project(self, outputs: tf.Tensor, proj_layer: keras.layers.Layer) -> tf.Tensor:
-        h = proj_layer(outputs)
-        return tf.image.resize(
-            h, self.output_size, method=tf.image.ResizeMethod.BILINEAR
-        )
-
     def forward(
         self, inputs: tf.Tensor, is_training: bool = False, quantized: bool = False
     ) -> List[tf.Tensor]:
@@ -61,33 +58,25 @@ class SizeEstimatorBackbone(Backbone):
 
         with tf.name_scope("SizeEstimator"):
             for scale in range(self.num_scales):
-
                 sf = 2 ** scale
-
                 outputs = backbone(inputs)
                 if not isinstance(outputs, tf.Tensor):
                     outputs = outputs[-1]
-                LOGGER.info(f"Processing scale: input shape = {inputs.shape} output shape = {outputs.shape}")
+                LOGGER.info(
+                    f"Processing scale: input shape = {inputs.shape} output shape = {outputs.shape}"
+                )
 
-                scales_outputs.append(sf * self.project(outputs, self.size_projection))
-                weights_outputs.append(self.project(outputs, self.weight_projection))
+                scales_outputs.append(self.size_proj(outputs, sf=sf))
+                weights_outputs.append(self.weight_proj(outputs))
 
                 if scale < self.num_scales - 1:
                     inputs = keras.layers.AveragePooling2D(padding="same")(inputs)
 
-        sizes: (B, H, W, 2, S) = tf.stack(scales_outputs, -1)
-        weights_logits: (B, H, W, 1, S) = tf.stack(weights_outputs, -1)
-
-        weights = tf.nn.softmax(weights_logits, axis=-1)
-        mean_sizes: (B, H, W, 2, S) = weights * sizes
-        mean_sizes: (B, H, W, 2) = tf.reduce_sum(mean_sizes, axis=-1)
-
-        mean_sizes = tf.identity(mean_sizes, name="mean_size")
-
-        weights_logits = tf.reduce_max(weights_logits, axis=-1)
-        weights_logits: (B, H, W, 1) = tf.identity(
-            weights_logits, name="weights_logits"
+        mean_sizes, weights_logits, _ = self.scale_merger(
+            scales_outputs, weights_outputs
         )
+        self.raw_scales_outputs = scales_outputs
+        self.raw_weights_outputs = weights_outputs
         return [mean_sizes, weights_logits]
 
 
@@ -188,3 +177,47 @@ def get_objectness_task(
         ],
     )
     return objectness_task
+
+
+class MergeScalesLayer(tf.keras.layers.Layer):
+    def call(
+        self,
+        scales_outputs: List[tf.Tensor],
+        weights_outputs: List[tf.Tensor],
+        **kwargs,
+    ):
+
+        sizes: (B, H, W, 2, S) = tf.stack(scales_outputs, -1)
+        weights_logits: (B, H, W, 1, S) = tf.stack(weights_outputs, -1)
+
+        weights = tf.nn.softmax(weights_logits, axis=-1)
+        mean_sizes: (B, H, W, 2, S) = weights * sizes
+        mean_sizes: (B, H, W, 2) = tf.reduce_sum(mean_sizes, axis=-1)
+
+        mean_sizes = tf.identity(mean_sizes, name="mean_size")
+
+        weights_logits = tf.reduce_max(weights_logits, axis=-1)
+        weights_logits: (B, H, W, 1) = tf.identity(
+            weights_logits, name="weights_logits"
+        )
+
+        return mean_sizes, weights_logits, weights
+
+
+class ProjectionResizeConv2DLayer(keras.layers.Conv2D):
+    def __init__(
+        self,
+        filters: int,
+        output_size: Tuple[int, int] = (5, 5),
+        activation: str = None,
+        name: str = None,
+        **kwargs,
+    ):
+        super().__init__(filters, (1, 1), activation=activation, name=name, **kwargs)
+        self.output_size = output_size
+
+    def call(self, inputs: tf.Tensor, sf: float = 1.0) -> tf.Tensor:
+        h = super().call(inputs)
+        return tf.image.resize(
+            sf * h, self.output_size, method=tf.image.ResizeMethod.BILINEAR
+        )

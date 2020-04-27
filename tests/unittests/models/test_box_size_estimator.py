@@ -10,7 +10,6 @@ import keras_detection.utils.testing_utils as utils
 from keras_detection import FPNBuilder
 from keras_detection import ImageData
 from keras_detection.backbones import resnet
-from keras_detection.tasks import standard_tasks
 
 
 def aug_fn(image_data: ImageData) -> ImageData:
@@ -98,6 +97,7 @@ class SizeEstimatorBackboneTest(tf.test.TestCase):
 
         se_backbone_model = se_backbone.as_model()
         tflite_ops.TFLiteModel.from_keras_model(se_backbone_model)
+        se_backbone_model.summary()
 
         se_backbone_model = se_backbone.as_model(quantized=True)
         tflite_ops.TFLiteModel.from_keras_model(se_backbone_model)
