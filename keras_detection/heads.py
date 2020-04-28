@@ -99,12 +99,14 @@ class SingleConvHead(Head):
     def build(
         self, input_shape: Tuple[int, int, int], is_training: bool = False
     ) -> keras.Model:
+
+        height, width = input_shape[:2]
         x = keras.layers.Input(shape=input_shape)
         h = keras.layers.Conv2D(self._num_filters, kernel_size=3, padding="same")(x)
         h = keras.layers.BatchNormalization()(h)
         h = keras.layers.ReLU()(h)
         h = keras.layers.Conv2D(self.num_outputs, kernel_size=1, activation=None)(h)
-        return keras.Model(x, h)
+        return keras.Model(x, h, name=f"head/fm{height}x{width}/{self.output_name}")
 
     def forward(
         self,

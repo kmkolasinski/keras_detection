@@ -15,3 +15,4 @@ class HeadsTest(tf.test.TestCase):
         self.assertEqual(outputs.shape.as_list(), [1, 32, 24, 4])
         q_outputs = head.forward(inputs, quantized=True)
         self.assertEqual(q_outputs.shape.as_list(), [1, 32, 24, 4])
+        head._head_model.summary()
