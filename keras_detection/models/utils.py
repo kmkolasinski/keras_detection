@@ -1,6 +1,7 @@
 from typing import List, Callable
 import tensorflow as tf
 from tensorflow.python.keras.layers import BatchNormalization
+from tensorflow.python.keras.layers.normalization_v2 import BatchNormalization as BatchNormalizationV2
 from tensorflow_model_optimization.python.core.quantization.keras.quantize_wrapper import (
     QuantizeWrapper,
 )
@@ -17,6 +18,8 @@ def get_all_bn_layers(layers: List[keras.layers.Layer]) -> List[keras.layers.Lay
             bn_layers.append(layer)
         elif isinstance(layer, QuantizeWrapper):
             if isinstance(layer.layer, BatchNormalization):
+                bn_layers.append(layer)
+            elif isinstance(layer.layer, BatchNormalizationV2):
                 bn_layers.append(layer)
         elif isinstance(layer, keras.Model):
             bn_layers += get_all_bn_layers(layer.layers)
