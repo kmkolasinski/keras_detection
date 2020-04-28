@@ -187,7 +187,7 @@ class MergeScalesLayer(tf.keras.layers.Layer):
         **kwargs,
     ):
         if len(scales_outputs) == 1:
-            return scales_outputs[0], weights_outputs[0]
+            return scales_outputs[0], weights_outputs[0], weights_outputs[0]
 
         sizes: (B, H, W, 2, S) = tf.stack(scales_outputs, -1)
         weights_logits: (B, H, W, 1, S) = tf.stack(weights_outputs, -1)
