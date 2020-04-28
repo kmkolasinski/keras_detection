@@ -17,6 +17,10 @@ class Head(ABC):
         self._output_name = output_name
         self._head_model: Optional[keras.Model] = None
 
+    def get_head_name(self, input_shape: Tuple[int, int, int]) -> str:
+        height, width = input_shape[:2]
+        return f"head/fm{height}x{width}/{self.output_name}"
+
     @property
     def output_name(self) -> str:
         return self._output_name
@@ -71,7 +75,7 @@ class ActivationHead(Head):
         self, input_shape: Tuple[int, int, int], is_training: bool = False
     ) -> keras.Model:
         x = keras.layers.Input(shape=input_shape)
-        return keras.Model(x, x)
+        return keras.Model(x, x, name=self.get_head_name(input_shape))
 
     def forward(
         self,
@@ -100,13 +104,12 @@ class SingleConvHead(Head):
         self, input_shape: Tuple[int, int, int], is_training: bool = False
     ) -> keras.Model:
 
-        height, width = input_shape[:2]
         x = keras.layers.Input(shape=input_shape)
         h = keras.layers.Conv2D(self._num_filters, kernel_size=3, padding="same")(x)
         h = keras.layers.BatchNormalization()(h)
         h = keras.layers.ReLU()(h)
         h = keras.layers.Conv2D(self.num_outputs, kernel_size=1, activation=None)(h)
-        return keras.Model(x, h, name=f"head/fm{height}x{width}/{self.output_name}")
+        return keras.Model(x, h, name=self.get_head_name(input_shape))
 
     def forward(
         self,
