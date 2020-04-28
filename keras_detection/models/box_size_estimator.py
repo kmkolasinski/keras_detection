@@ -90,7 +90,7 @@ class BoxSizeEstimatorBuilder(FPNBuilder):
         num_scales: int = 2,
         output_size: Tuple[int, int] = (5, 5),
     ):
-        if base_backbone.input_shape[1:3] != (None, None):
+        if base_backbone.input_shape[1:3] != (None, None) and num_scales > 1:
             raise ValueError(
                 f"Backbone input shape height and width must "
                 f"be None, got: {base_backbone.input_shape}"
@@ -186,6 +186,8 @@ class MergeScalesLayer(tf.keras.layers.Layer):
         weights_outputs: List[tf.Tensor],
         **kwargs,
     ):
+        if len(scales_outputs) == 1:
+            return scales_outputs[0], weights_outputs[0]
 
         sizes: (B, H, W, 2, S) = tf.stack(scales_outputs, -1)
         weights_logits: (B, H, W, 1, S) = tf.stack(weights_outputs, -1)
