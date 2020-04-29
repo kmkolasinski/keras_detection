@@ -62,7 +62,7 @@ def from_numpy_generator(generator) -> tf.data.Dataset:
     example: NestedDict = next(generator)
     output_types = py_ops.map_nested_dict(example, lambda e: tf.as_dtype(e.dtype))
 
-    # TODO fix output shapes to have defined, here only the last
+    # TODO fix output shapes to be defined, here only the last
     #   dimension is not None
     output_shapes = py_ops.map_nested_dict(
         example,

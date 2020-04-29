@@ -6,6 +6,8 @@ from typing import List, Any, Dict, Tuple, Optional
 import tensorflow as tf
 import numpy as np
 from PIL.Image import Image
+
+from keras_detection.ops import np_frame_ops
 from keras_detection.structures import DataClass
 import keras_detection.utils.plotting as plotting
 import matplotlib.pyplot as plt
@@ -74,6 +76,7 @@ class BoxDetectionOutput(DataClass):
         title: Optional[str] = None,
         fontsize: int = 10,
         linewidth: float = 2,
+        fmt: str = "png"
     ) -> Image:
 
         label2color = plotting.labels_to_colors(self.num_classes)
@@ -104,7 +107,24 @@ class BoxDetectionOutput(DataClass):
             )
             ax.add_patch(rect)
 
-        return plotting.plot_to_image(figure, format="jpg")
+        return plotting.plot_to_image(figure, format=fmt)
+
+    @staticmethod
+    def from_tf_boxes(
+            boxes: np.ndarray,
+            labels: np.ndarray,
+            scores: Optional[np.ndarray] = None,
+            classes_scores: Optional[np.ndarray] = None
+    ) -> "BoxDetectionOutput":
+        y, c = np_frame_ops.boxes_centers(boxes)
+        h, w = np_frame_ops.boxes_heights_widths(boxes)
+        boxes = np.stack([h, w, y, c], axis=-1)
+        return BoxDetectionOutput(
+            boxes=boxes,
+            labels=labels,
+            scores=scores or np.ones(shape=labels.shape),
+            classes_scores=classes_scores or np.ones(shape=labels.shape),
+        )
 
 
 class BoxDetector:

@@ -10,7 +10,7 @@ from PIL import Image
 from matplotlib import patches
 
 
-def plot_to_image(figure, format: str = "jpg"):
+def plot_to_image(figure, format: str = "png"):
     """Converts the matplotlib plot specified by 'figure' to a PNG image and
   returns it. The supplied figure is closed and inaccessible after this call."""
 
@@ -32,7 +32,7 @@ def draw_objectness_map(
     image: Union[np.ndarray, tf.Tensor],
     objectness: Union[np.ndarray, tf.Tensor],
     figsize: Tuple[int, int] = (5, 5),
-    fmt: str = "jpg",
+    fmt: str = "png",
     subtitle: str = "",
     **kwargs,
 ) -> Image.Image:
@@ -63,7 +63,7 @@ def draw_classes_map(
     classes_map: Union[np.ndarray, tf.Tensor],
     figsize: Tuple[int, int] = (5, 5),
     score_threshold: float = 0.1,
-    fmt: str = "jpg",
+    fmt: str = "png",
     subtitle: str = "",
     **kwargs,
 ) -> Image.Image:
@@ -111,7 +111,7 @@ def draw_classes_max_score_map(
     classes_map: Union[np.ndarray, tf.Tensor],
     figsize: Tuple[int, int] = (5, 5),
     score_threshold: float = 0.1,
-    fmt: str = "jpg",
+    fmt: str = "png",
     subtitle: str = "",
     **kwargs,
 ) -> Image.Image:
@@ -149,18 +149,21 @@ def draw_classes_max_score_map(
 
 def draw_boxes(
     image: Union[np.ndarray, tf.Tensor],
-    objectness: Union[np.ndarray, tf.Tensor],
     boxes_shape_map: Union[np.ndarray, tf.Tensor],
+    objectness: Optional[Union[np.ndarray, tf.Tensor]] = None,
     classes_map: Optional[Union[np.ndarray, tf.Tensor]] = None,
     score_threshold: float = 0.3,
     figsize: Tuple[int, int] = (5, 5),
-    fmt: str = "jpg",
+    fmt: str = "png",
     num_classes: Optional[int] = None,
     subtitle: str = "",
     fontsize: int = 15,
     linewidth: float = 2,
     **kwargs,
 ) -> Image.Image:
+
+    if objectness is None:
+        objectness = np.ones_like(boxes_shape_map)[..., 0]
 
     if isinstance(image, tf.Tensor):
         image = image.numpy()

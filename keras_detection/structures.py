@@ -3,9 +3,11 @@ from typing import Tuple, Optional, TypeVar, Generic, Any, List, Iterable, Dict
 import dataclasses as dc
 import numpy as np
 import tensorflow as tf
+from PIL import Image
 from dataclasses import dataclass
 from imgaug import BoundingBoxesOnImage
 from keras_detection.ops import np_frame_ops
+from keras_detection.utils import plotting
 
 keras = tf.keras
 Tensor = TypeVar("Tensor", tf.Tensor, np.ndarray)

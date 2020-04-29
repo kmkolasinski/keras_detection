@@ -109,7 +109,8 @@ def prepare_dataset(
 
 class DigitStructFile:
     """
-    This class has been copied from internet ...
+    This class has been copied from the internet I don't remember the link to this
+    implementation
 
 
     Example usage:

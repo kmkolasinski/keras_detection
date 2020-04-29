@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-datasets
+./datasets/
 notebooks
 .idea
 # C extensions
