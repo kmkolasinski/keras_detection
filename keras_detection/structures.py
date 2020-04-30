@@ -121,11 +121,7 @@ class LabelsFrame(DataClass, Generic[Tensor]):
 
     @classmethod
     def dataset_dtypes(cls):
-        return {
-            "boxes": tf.float32,
-            "labels": tf.int64,
-            "weights": tf.float32,
-        }
+        return {"boxes": tf.float32, "labels": tf.int64, "weights": tf.float32}
 
     @classmethod
     def dataset_shapes(cls):
@@ -134,6 +130,33 @@ class LabelsFrame(DataClass, Generic[Tensor]):
             "labels": tf.TensorShape([None]),
             "weights": tf.TensorShape([None]),
         }
+
+    def unbatch(self) -> List["LabelsFrame"]:
+        if self.num_rows is None:
+            raise ValueError("Batched image data must have defined num_rows")
+
+        if len(self.boxes.shape) != 3:
+            raise ValueError(
+                "Batched boxes must be a Tensor of rank 3 with shape [num_images, max_num_boxes, 4]"
+            )
+        if len(self.labels.shape) != 2:
+            raise ValueError(
+                "Batched labels must be a Tensor of rank 2 with shape [num_images, max_num_boxes]"
+            )
+        if len(self.weights.shape) != 2:
+            raise ValueError(
+                "Batched weights must be a Tensor of rank 2 with shape [num_images, max_num_boxes]"
+            )
+
+        frames = []
+        for i in range(self.length):
+            num_boxes = self.num_rows[i]
+            boxes = self.boxes[i, :num_boxes]
+            labels = self.labels[i, :num_boxes]
+            weights = self.weights[i, :num_boxes]
+            frame = LabelsFrame(boxes=boxes, labels=labels, weights=weights)
+            frames.append(frame)
+        return frames
 
 
 @dataclass(frozen=True)
@@ -147,6 +170,18 @@ class Features(DataClass, Generic[Tensor]):
     @classmethod
     def dataset_shapes(cls):
         return {"image": tf.TensorShape([None, None, 3])}
+
+    def unbatch(self) -> List["Features"]:
+        if len(self.image.shape) != 4:
+            raise ValueError(
+                "Batched Features.image must be a Tensor of rank 4 with "
+                "shape [num_images, height, width, num_channels]"
+            )
+
+        features = []
+        for i in range(self.image.shape[0]):
+            features.append(Features(image=self.image[i]))
+        return features
 
 
 @dataclass(frozen=True)
@@ -192,14 +227,19 @@ class ImageData(DataClass, Generic[Tensor]):
             "labels": LabelsFrame.dataset_shapes(),
         }
 
+    def unbatch(self) -> List["ImageData"]:
+        features = self.features.unbatch()
+        labels = self.labels.unbatch()
+        return [ImageData(f, l) for f, l in zip(features, labels)]
+
     def draw_boxes(
-            self,
-            figsize: Tuple[int, int] = (6, 6),
-            title: Optional[str] = None,
-            num_classes: Optional[int] = None,
-            fontsize: int = 10,
-            linewidth: float = 2,
-            fmt: str = "png",
+        self,
+        figsize: Tuple[int, int] = (6, 6),
+        title: Optional[str] = None,
+        num_classes: Optional[int] = None,
+        fontsize: int = 10,
+        linewidth: float = 2,
+        fmt: str = "png",
     ):
         return plotting.draw_labels_frame_boxes(
             image=self.features.image,
@@ -261,7 +301,7 @@ def get_padding_shapes(
     )
 
     labels_paddings = get_labels_padding_shapes(
-        shapes["labels"], max_num_boxes=max_num_boxes,
+        shapes["labels"], max_num_boxes=max_num_boxes
     )
 
     return {"features": features_paddings, "labels": labels_paddings}
@@ -289,7 +329,7 @@ def get_features_padding_shapes(
 
 
 def get_labels_padding_shapes(
-    frame: Dict[str, Any], max_num_boxes: Optional[int],
+    frame: Dict[str, Any], max_num_boxes: Optional[int]
 ) -> dict:
     """Returns shapes to pad dataset tensors to before batching.
 
