@@ -61,6 +61,10 @@ def image_localization_metrics(
     Returns:
         precision, recall, f1_score metrics values
     """
+
+    assert isinstance(target, LabelsFrame), "Targets frame must be an instance of LabelsFrame"
+    assert isinstance(predicted, LabelsFrame), "Predictions frame must be an instance of LabelsFrame"
+
     t_indices, p_indices = np_frame_ops.argmax_iou_matching(
         target.boxes, predicted.boxes, iou_threshold
     )
