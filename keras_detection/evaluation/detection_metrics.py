@@ -73,15 +73,13 @@ def image_localization_metrics(
     num_targets = target.boxes.shape[0]
     num_predictions = predicted.boxes.shape[0]
 
-    num_unique_boxes = num_predictions + num_targets - num_matches
-
     precision = num_matches / max(num_predictions, 1)
     recall = num_matches / max(num_targets, 1)
-    f1_score = 2 * precision * recall / (precision + recall)
+    f1_score = 2 * precision * recall / (precision + recall + 1e-6)
 
     prefix = f"localization@{iou_threshold}/"
     return [
-        Metric(prefix + MetricNames.PRECISION, precision, num_unique_boxes),
-        Metric(prefix + MetricNames.RECALL, recall, num_unique_boxes),
-        Metric(prefix + MetricNames.F1_SCORE, f1_score, num_unique_boxes),
+        Metric(prefix + MetricNames.PRECISION, precision, num_targets),
+        Metric(prefix + MetricNames.RECALL, recall, num_targets),
+        Metric(prefix + MetricNames.F1_SCORE, f1_score, num_targets),
     ]
