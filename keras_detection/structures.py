@@ -1,11 +1,12 @@
 from collections import OrderedDict
 from typing import Tuple, Optional, TypeVar, Generic, Any, List, Iterable, Dict
+
 import dataclasses as dc
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 from dataclasses import dataclass
 from imgaug import BoundingBoxesOnImage
+
 from keras_detection.ops import np_frame_ops
 from keras_detection.utils import plotting
 
@@ -190,6 +191,27 @@ class ImageData(DataClass, Generic[Tensor]):
             "features": Features.dataset_shapes(),
             "labels": LabelsFrame.dataset_shapes(),
         }
+
+    def draw_boxes(
+            self,
+            figsize: Tuple[int, int] = (6, 6),
+            title: Optional[str] = None,
+            num_classes: Optional[int] = None,
+            fontsize: int = 10,
+            linewidth: float = 2,
+            fmt: str = "png",
+    ):
+        return plotting.draw_labels_frame_boxes(
+            image=self.features.image,
+            boxes=self.labels.boxes,
+            labels=self.labels.labels,
+            num_classes=num_classes,
+            figsize=figsize,
+            title=title,
+            fontsize=fontsize,
+            linewidth=linewidth,
+            fmt=fmt,
+        )
 
 
 def get_padding_shapes(

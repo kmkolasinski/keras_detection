@@ -22,6 +22,8 @@ setup(
         'tensorflow-addons>=0.8.*',
         'imgaug>=0.4',
         'cached_property>=1.5',
+        "cython==0.29.17",
+        "pycocotools==2.0.0"
     ],
     include_package_data=True
 )

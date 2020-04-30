@@ -8,7 +8,7 @@ import numpy as np
 from PIL.Image import Image
 
 from keras_detection.ops import np_frame_ops
-from keras_detection.structures import DataClass
+from keras_detection.structures import DataClass, LabelsFrame
 import keras_detection.utils.plotting as plotting
 import matplotlib.pyplot as plt
 from matplotlib import patches
@@ -69,6 +69,9 @@ class BoxDetectionOutput(DataClass):
         fields = {n: self.get(n)[indices] for n in self.non_empty_names}
         return BoxDetectionOutput(**fields)
 
+    def to_labels_frame(self) -> LabelsFrame[np.ndarray]:
+        return LabelsFrame(boxes=self.as_tf_boxes, labels=self.labels)
+
     def draw(
         self,
         image: np.ndarray,
@@ -76,45 +79,27 @@ class BoxDetectionOutput(DataClass):
         title: Optional[str] = None,
         fontsize: int = 10,
         linewidth: float = 2,
-        fmt: str = "png"
+        fmt: str = "png",
     ) -> Image:
-
-        label2color = plotting.labels_to_colors(self.num_classes)
-        figure = plt.figure(figsize=figsize)
-        ax = figure.add_subplot(111, aspect="equal")
-        if title is not None:
-            plt.title(title)
-
-        if image.dtype != np.uint8 and image.max() > 2:
-            image = image / 255.0
-
-        plt.imshow(image)
-        height, width = image.shape[:2]
-        y_min, x_min = self.y_min, self.x_min
-
-        for idx in range(self.num_boxes):
-            pos = (x_min[idx] * width, y_min[idx] * height)
-            label = self.labels[idx]
-            color = label2color.get(label, "r")
-            plt.text(*pos, f"{label}", color=color, size=fontsize)
-            rect = patches.Rectangle(
-                pos,
-                self.widths[idx] * height,
-                self.heights[idx] * width,
-                linewidth=linewidth,
-                edgecolor=color,
-                facecolor="none",
-            )
-            ax.add_patch(rect)
-
-        return plotting.plot_to_image(figure, format=fmt)
+        frame = self.to_labels_frame()
+        return plotting.draw_labels_frame_boxes(
+            image=image,
+            boxes=frame.boxes,
+            labels=self.labels,
+            num_classes=self.num_classes,
+            figsize=figsize,
+            title=title,
+            fontsize=fontsize,
+            linewidth=linewidth,
+            fmt=fmt,
+        )
 
     @staticmethod
     def from_tf_boxes(
-            boxes: np.ndarray,
-            labels: np.ndarray,
-            scores: Optional[np.ndarray] = None,
-            classes_scores: Optional[np.ndarray] = None
+        boxes: np.ndarray,
+        labels: np.ndarray,
+        scores: Optional[np.ndarray] = None,
+        classes_scores: Optional[np.ndarray] = None,
     ) -> "BoxDetectionOutput":
         y, c = np_frame_ops.boxes_centers(boxes)
         h, w = np_frame_ops.boxes_heights_widths(boxes)
@@ -194,17 +179,16 @@ class FPNKerasBoxDetector(BoxDetector):
             if "classes" in predictions:
                 classes_scores = predictions["classes"][i].reshape([num_boxes, -1])
                 labels = classes_scores.argmax(-1)
-                scores = self._scores_selection(objectness_scores, classes_scores.max(-1))
+                scores = self._scores_selection(
+                    objectness_scores, classes_scores.max(-1)
+                )
             else:
-                labels = np.array([0]*num_boxes)
+                labels = np.array([0] * num_boxes)
                 scores = objectness_scores
                 classes_scores = objectness_scores.reshape([num_boxes, 1])
 
             output = BoxDetectionOutput(
-                boxes=boxes,
-                scores=scores,
-                labels=labels,
-                classes_scores=classes_scores,
+                boxes=boxes, scores=scores, labels=labels, classes_scores=classes_scores
             )
             outputs.append(output)
 
