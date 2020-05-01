@@ -106,6 +106,16 @@ def draw_t_shape(
 
 
 @jit(nopython=True)
+def coord_outside_window(coord: float) -> float:
+    dcoord = 0.0
+    if coord < 0:
+        dcoord = abs(coord)
+    elif coord > 1:
+        dcoord = 1.0 - abs(coord)
+    return dcoord
+
+
+@jit(nopython=True)
 def draw_random_t_shape(
     image: np.ndarray,
     color: np.ndarray,
@@ -127,9 +137,14 @@ def draw_random_t_shape(
     ymax = ymin + height
     xmax = xmin + width
 
-    im_h, im_w = image_height_width(image)
+    dymin = coord_outside_window(ymin)
+    dymax = coord_outside_window(ymax)
+    dxmin = coord_outside_window(xmin)
+    dxmax = coord_outside_window(xmax)
 
-    bbox = np.array([ymin, xmin, ymax, xmax])
+    im_h, im_w = image_height_width(image)
+    dy, dx = dymin + dymax, dxmin + dxmax
+    bbox = np.array([ymin + dy, xmin + dx, ymax + dy, xmax + dx])
     image_rect = bbox * np.array([im_h, im_w, im_h, im_w])
 
     image = draw_t_shape(
@@ -153,22 +168,26 @@ def draw_random_t_shape_image(
     alpha: float = 0.5,
     mode: int = BLEND_ADD,
     num_colors: int = 32,
+    color_min_value: int = 50
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     num_boxes = boxes_output.shape[0]
-    grid_size = int(num_boxes ** 0.5)
+    grid_size = round(num_boxes ** 0.5)
+
+    color_min_value = color_min_value // 255
     dg = 0.5 / grid_size
+
     for i in range(num_boxes):
         row, col = divmod(i, grid_size)
         row, col = row / grid_size, col / grid_size
 
-        min_max_ypos = (max(row - dg, 0.0), min(row + dg, 1.0))
-        min_max_xpos = (max(col - dg, 0.0), min(col + dg, 1.0))
+        min_max_ypos = (max(row, 0.0), min(row + 2 * dg, 1.0))
+        min_max_xpos = (max(col, 0.0), min(col + 2 * dg, 1.0))
 
         n = 1 / (num_colors - 1)
-        r = n * np.random.randint(num_colors // 10, num_colors)
-        g = n * np.random.randint(num_colors // 10, num_colors)
-        b = n * np.random.randint(num_colors // 10, num_colors)
+        r = n * np.random.randint(color_min_value, num_colors)
+        g = n * np.random.randint(color_min_value, num_colors)
+        b = n * np.random.randint(color_min_value, num_colors)
         color = np.array([r, g, b], dtype=np.float32)
 
         image, bbox, label = draw_random_t_shape(
@@ -192,25 +211,35 @@ def create_random_rectangles_dataset_generator(
     min_max_height: Tuple[float, float] = (0.08, 0.15),
     min_max_hw_ratio: Tuple[float, float] = (0.8, 1.2),
     alpha: float = 0.5,
-    mode: int = BLEND_ADD,
+    mode: int = BLEND_MULTIPLY,
     num_colors: int = 32,
+    color_min_value: int = 50
 ):
 
+    assert color_min_value // 255 < num_colors
+    assert min_max_num_boxes[0] >= 1
+
     while True:
-        image = np.zeros([image_size[0], image_size[1], 3], dtype=np.float32)
+
+        image = np.ones([image_size[0], image_size[1], 3])
+        bg_color = np.random.randint(color_min_value // 255, num_colors, [1, 1, 3])
+        bg_color = bg_color / bg_color.max()
+        image = image * bg_color
+
         num_boxes = np.random.randint(*min_max_num_boxes)
         boxes = np.zeros([num_boxes, 4], dtype=np.float32)
         labels = np.zeros([num_boxes], dtype=np.int64)
 
         image, boxes, labels = draw_random_t_shape_image(
-            image,
-            boxes,
+            image.astype(np.float32),
+            boxes.astype(np.float32),
             labels,
             min_max_height=min_max_height,
             min_max_hw_ratio=min_max_hw_ratio,
             alpha=alpha,
             mode=mode,
             num_colors=num_colors,
+            color_min_value=color_min_value
         )
 
         weights = np.ones_like(labels).astype(np.float32)

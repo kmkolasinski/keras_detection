@@ -302,14 +302,14 @@ def draw_labels_frame_boxes(
     y_min, x_min = boxes[:, 0], boxes[:, 1]
 
     for idx in range(num_boxes):
-        pos = (x_min[idx] * width, y_min[idx] * height)
+        pos = (int(x_min[idx] * width), int(y_min[idx] * height))
         label = labels[idx]
         color = label2color.get(label, "r")
         plt.text(*pos, f"{label}", color=color, size=fontsize)
         rect = patches.Rectangle(
             pos,
-            widths[idx] * height,
-            heights[idx] * width,
+            int(widths[idx] * height),
+            int(heights[idx] * width),
             linewidth=linewidth,
             edgecolor=color,
             facecolor="none",
