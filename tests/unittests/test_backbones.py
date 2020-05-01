@@ -4,6 +4,12 @@ import keras_detection.utils.testing_utils as utils
 from keras_detection.backbones import resnet
 from keras_detection.backbones import fpn
 
+
+# TODO Consider running tests with different policies
+# from tensorflow.keras.mixed_precision import experimental as mixed_precision
+# policy = mixed_precision.Policy('mixed_float16')
+# mixed_precision.set_policy(policy)
+
 utils.maybe_enable_eager_mode()
 
 
@@ -22,10 +28,6 @@ class ResNetBackboneTest(tf.test.TestCase):
         feature_maps = backbone.forward(inputs)
         quantized_feature_maps = backbone.forward(inputs, quantized=True)
 
-
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_policy(policy)
 
 class DenseFPNBackboneTest(tf.test.TestCase):
     image_dim = 64
