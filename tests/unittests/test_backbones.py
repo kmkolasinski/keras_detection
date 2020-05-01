@@ -23,6 +23,10 @@ class ResNetBackboneTest(tf.test.TestCase):
         quantized_feature_maps = backbone.forward(inputs, quantized=True)
 
 
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_policy(policy)
+
 class DenseFPNBackboneTest(tf.test.TestCase):
     image_dim = 64
 

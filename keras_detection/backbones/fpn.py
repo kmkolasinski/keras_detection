@@ -66,12 +66,21 @@ def build_fpn(
         outputs.append(top_down)
 
         for level in reversed(range(num_levels - 1)):
+
+            # TODO: This should be fixed
+            #       upsampling changes the output dtype to float32
+            #       upsampling - is not supported when converting to uint8 using post quant
+            input_dtype = top_down.dtype
             top_down = layers.UpSampling2D(size=(2, 2), interpolation="bilinear")(
                 top_down
             )
+            if input_dtype != top_down.dtype:
+                top_down = tf.cast(top_down, input_dtype)
+
             residual = layers.Conv2D(
                 depth, [1, 1], padding="same", name="projection_%d" % (level + 1)
             )(feature_maps[level])
+
             top_down = 0.5 * top_down + 0.5 * residual
             # additional smoothing layer is used to mitigate the artifacts
             # appearing during up sampling
