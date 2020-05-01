@@ -222,7 +222,7 @@ def create_random_rectangles_dataset_generator(
     while True:
 
         image = np.ones([image_size[0], image_size[1], 3])
-        bg_color = np.random.randint(color_min_value // 255, num_colors, [1, 1, 3])
+        bg_color = np.random.randint(1 + color_min_value // 255, num_colors, [1, 1, 3])
         bg_color = bg_color / bg_color.max()
         image = image * bg_color
 
