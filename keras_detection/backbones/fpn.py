@@ -10,6 +10,7 @@ backend = tf.keras.backend
 layers = tf.keras.layers
 models = tf.keras.models
 keras_utils = tf.keras.utils
+_logger = tf.get_logger()
 
 
 class FPNBackbone(Backbone):
@@ -56,6 +57,8 @@ def build_fpn(
         for i, shape in enumerate(feature_maps_shapes)
     ]
 
+    _logger.info(f"Building FPN module with inputs: {feature_maps_shapes}")
+
     with tf.name_scope("fpn_top_down"):
         num_levels = len(feature_maps)
         outputs = []
@@ -89,6 +92,10 @@ def build_fpn(
                     top_down
                 )
             )
+
+    _logger.info(f"FPN outputs with inputs:")
+    for o in outputs:
+        _logger.info(f" => {o.shape}")
 
     model = keras.models.Model(feature_maps, outputs[::-1], name="fpn")
     return model

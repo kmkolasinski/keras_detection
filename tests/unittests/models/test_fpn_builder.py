@@ -7,6 +7,7 @@ import tensorflow as tf
 from keras_detection import FPNBuilder
 from keras_detection import ImageData
 from keras_detection.backbones import resnet
+from keras_detection.backbones.fpn import FPNBackbone
 from keras_detection.backbones.simple_cnn import SimpleCNNBackbone
 from keras_detection.tasks import standard_tasks
 from keras_detection.utils import tflite_debugger
@@ -62,6 +63,7 @@ class BuilderTest(tf.test.TestCase):
             num_test_steps=1,
             merge_feature_maps=True,
             postprocess_outputs=True,
+            convert_quantized_model=True
         )
 
         qmodel = builder.build_quantized(
@@ -151,6 +153,24 @@ class BuilderTest(tf.test.TestCase):
                 num_classes=10, fl_gamma=0, activation="softmax"
             ),
         ]
+
+        builder = FPNBuilder(backbone=backbone, tasks=tasks)
+        self.train_export_model(builder)
+
+    def test_model_with_objectness_and_fpn_backbone(self):
+
+        image_dim = 64
+        backbone = resnet.ResNetBackbone(
+            input_shape=(image_dim, image_dim, 3),
+            units_per_block=(1, 1, 1),
+            num_last_blocks=3,
+        )
+        backbone = FPNBackbone(
+            backbone, depth=16,
+            num_first_blocks=1
+        )
+
+        tasks = [standard_tasks.get_objectness_task()]
 
         builder = FPNBuilder(backbone=backbone, tasks=tasks)
         self.train_export_model(builder)

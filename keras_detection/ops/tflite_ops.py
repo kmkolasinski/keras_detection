@@ -27,9 +27,23 @@ class TFLiteModel:
 
     @classmethod
     def from_keras_model(
-        cls, model: keras.Model, optimizations: Optional[List[tf.lite.Optimize]] = None
+        cls,
+        model: keras.Model,
+        optimizations: Optional[List[tf.lite.Optimize]] = None,
+        dataset: Optional[tf.data.Dataset] = None,
+        num_samples: int = 32,
     ) -> "TFLiteModel":
-        return cls(convert_default(model, optimizations=optimizations))
+        if dataset is None:
+            return cls(convert_default(model, optimizations=optimizations))
+        else:
+            return cls(
+                convert_quantized(
+                    model,
+                    dataset=dataset,
+                    num_samples=num_samples,
+                    optimizations=optimizations,
+                )
+            )
 
     def get_details(self, inputs: bool, key: str) -> List[Any]:
         if inputs:
@@ -95,6 +109,10 @@ class TFLiteModel:
         inputs = self.validate_inputs(inputs)
         return self.predict_fn(inputs)
 
+    def test_predict(self, num_test_steps: int = 1) -> None:
+        """Run test predict on random inputs to smoke test converted model"""
+        test_run_tflite_model(self.tflite_model, num_test_steps=num_test_steps)
+
 
 def convert_default(
     model: keras.Model, optimizations: Optional[List[tf.lite.Optimize]] = None
@@ -103,7 +121,9 @@ def convert_default(
     if optimizations is None:
         optimizations = [tf.lite.Optimize.DEFAULT]
 
-    LOGGER.info(f"Building TFLite model from Keras Model using optimizations: {optimizations}")
+    LOGGER.info(
+        f"Building TFLite model from Keras Model using optimizations: {optimizations}"
+    )
     converter = from_keras_model(model)
     converter.experimental_new_converter = True
     converter.experimental_new_quantizer = True
@@ -113,10 +133,32 @@ def convert_default(
 
 
 def convert_quantized(
-    model: keras.Model, dataset: tf.data.Dataset, num_samples: int = 32
+    model: keras.Model,
+    dataset: tf.data.Dataset,
+    num_samples: int = 32,
+    optimizations: Optional[List[tf.lite.Optimize]] = None,
 ) -> bytes:
+
+    if optimizations is None:
+        optimizations = [tf.lite.Optimize.DEFAULT]
+
     def representative_dataset_gen():
-        for k, (features, _) in enumerate(dataset):
+        for k, data in enumerate(dataset):
+
+            if isinstance(data, tuple) and len(data) == 2:
+                features = data[0]
+                if not isinstance(features, dict):
+                    raise ValueError(
+                        f"Features must be a dict, got {list(features)} with values: {features}"
+                    )
+            elif isinstance(data, dict):
+                features = data
+            else:
+                raise ValueError(
+                    "Representative dataset should return (features, labels) tuple or "
+                    "single dict with features inputs"
+                )
+
             if k >= num_samples:
                 break
             LOGGER.debug(f"Sampling {k + 1}/{num_samples}")
@@ -125,7 +167,7 @@ def convert_quantized(
     converter = from_keras_model(model)
     converter.experimental_new_converter = True
     converter.experimental_new_quantizer = True
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.optimizations = optimizations
     converter.target_spec.target_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.representative_dataset = representative_dataset_gen
 
@@ -226,7 +268,9 @@ def convert_model_to_tflite(
             msg = (
                 "Dataset and model must have the same batch size. If "
                 "exported model have batch_size = None, then dataset "
-                "should be set to batch_size = 1."
+                f"should be set to batch_size = 1. Input {name} has "
+                f"shape {dataset_input_shapes[name]}, but expected batch "
+                f"size to be equal {bs}."
             )
             assert dataset_input_shapes[name] == bs, msg
 

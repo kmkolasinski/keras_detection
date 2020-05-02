@@ -1,4 +1,6 @@
-from typing import Tuple
+import shutil
+import tempfile
+from typing import Tuple, Union
 
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 import tensorflow as tf
@@ -23,7 +25,7 @@ def create_fake_fm_desc(scale: int = 1):
 
 def create_fake_boxframe(repeats: int = 1) -> LabelsFrame[tf.Tensor]:
     boxes = tf.constant(
-        [[0.0, 0.0, 0.1, 0.1], [0.1, 0.1, 0.2, 0.2], [0.4, 0.4, 0.6, 0.6]] * repeats,
+        [[0.0, 0.0, 0.1, 0.1], [0.1, 0.1, 0.2, 0.2], [0.4, 0.4, 0.6, 0.6]] * repeats
     )
     labels = tf.constant([1, 0, 0] * repeats, dtype=tf.int32)
     weights = tf.constant([0.5, 1.0, 0.0] * repeats)
@@ -57,7 +59,10 @@ def create_fake_input_map(
 
 
 def create_fake_detection_dataset_generator(
-    num_steps: int = 10, num_boxes: int = 5, num_classes: int = 10
+    num_steps: int = 10,
+    num_boxes: int = 5,
+    num_classes: int = 10,
+    image_shape: Union[Tuple[int, int, int], Tuple[int, int, int, int]] = (333, 777, 3),
 ):
     max_num_boxes = num_boxes
     for i in range(num_steps):
@@ -71,7 +76,7 @@ def create_fake_detection_dataset_generator(
         boxes = np.stack([ymin, xmin, ymax, xmax]).T.astype(np.float32)
         labels = np.random.randint(0, num_classes, size=num_boxes)
         weights = np.ones_like(labels).astype(np.float32)
-        image = np.random.randint(0, 255, size=(333, 777, 3), dtype=np.uint8)
+        image = np.random.randint(0, 255, size=image_shape, dtype=np.uint8)
 
         features = {"image": image}
         labels = {"boxes": boxes, "labels": labels, "weights": weights}
@@ -107,3 +112,30 @@ def create_fake_detection_batched_dataset(
         shuffle_buffer_size=1,
         prefetch_buffer_size=1,
     )
+
+
+def create_backbone_fake_representative_dataset(
+    input_shape: Tuple[int, int, int, int] = (1, 64, 64, 3), num_steps: int = 100
+) -> tf.data.Dataset:
+    raw_dataset = datasets_ops.from_numpy_generator(
+        create_fake_detection_dataset_generator(
+            num_steps=num_steps, image_shape=input_shape
+        )
+    )
+
+    def map_fn(data):
+        image = data["features"]["image"]
+        image = tf.cast(image, dtype=tf.float32) / 255.0
+        image.set_shape(input_shape)
+        return {"image": image}, {}
+
+    return raw_dataset.map(map_fn)
+
+
+class BaseUnitTest(tf.test.TestCase):
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
