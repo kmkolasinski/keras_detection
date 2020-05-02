@@ -70,15 +70,15 @@ def build_fpn(
 
         for level in reversed(range(num_levels - 1)):
 
-            # TODO: This should be fixed
-            #       upsampling changes the output dtype to float32
-            #       upsampling - is not supported when converting to uint8 using post quant
-            input_dtype = top_down.dtype
-            top_down = layers.UpSampling2D(size=(2, 2), interpolation="bilinear")(
-                top_down
-            )
-            if input_dtype != top_down.dtype:
-                top_down = tf.cast(top_down, input_dtype)
+
+            # input_dtype = top_down.dtype
+            # top_down = layers.UpSampling2D(size=(2, 2), interpolation="bilinear")(
+            #     top_down
+            # )
+            # if input_dtype != top_down.dtype:
+            #     top_down = tf.cast(top_down, input_dtype)
+
+            top_down = upsample2d(top_down)
 
             residual = layers.Conv2D(
                 depth, [1, 1], padding="same", name="projection_%d" % (level + 1)
@@ -88,9 +88,9 @@ def build_fpn(
             # additional smoothing layer is used to mitigate the artifacts
             # appearing during up sampling
             outputs.append(
-                layers.Conv2D(depth, [3, 3], padding="same", name="smoothing_%d" % (level + 1))(
-                    top_down
-                )
+                layers.Conv2D(
+                    depth, [3, 3], padding="same", name="smoothing_%d" % (level + 1)
+                )(top_down)
             )
 
     _logger.info(f"FPN outputs with inputs:")
@@ -99,3 +99,17 @@ def build_fpn(
 
     model = keras.models.Model(feature_maps, outputs[::-1], name="fpn")
     return model
+
+
+def upsample2d(inputs: tf.Tensor) -> tf.Tensor:
+    # TODO: This should be fixed
+    #       upsampling changes the output dtype to float32
+    #       upsampling - is not supported when converting to uint8 using post quant
+
+    with tf.name_scope("Upsample2D"):
+        height, width = inputs.shape[1], inputs.shape[2]
+        input_dtype = inputs.dtype
+        outputs = tf.image.resize(images=inputs, size=(2 * height, 2 * width))
+        if input_dtype != outputs.dtype:
+            outputs = tf.cast(outputs, input_dtype)
+    return outputs
