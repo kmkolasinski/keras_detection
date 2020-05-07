@@ -14,8 +14,14 @@ from keras_detection.utils.tflite_converter_shitfix import from_keras_model
 
 LOGGER = tf.get_logger()
 keras = tf.keras
-TFLITE_SUFFIX = ".tflite"
-QUANTIZED_TFLITE_SUFFIX = ".quantized.tflite"
+
+
+# No quantization, float32
+TFLITE_F32_SUFFIX = ".f32.tflite"
+# Dynamic range quantized
+TFLITE_DR_SUFFIX = ".dr.quantized.tflite"
+# Fixed range quantized
+TFLITE_FR_SUFFIX = ".fr.quantized.tflite"
 
 
 class TFLiteModel:
@@ -112,6 +118,13 @@ class TFLiteModel:
     def test_predict(self, num_test_steps: int = 1) -> None:
         """Run test predict on random inputs to smoke test converted model"""
         test_run_tflite_model(self.tflite_model, num_test_steps=num_test_steps)
+
+    def dump(self, save_path: Path) -> Path:
+        LOGGER.info(f"Saving TFLite model: {save_path}")
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with save_path.open("wb") as file:
+            file.write(self.tflite_model)
+        return save_path
 
 
 def convert_default(
@@ -232,26 +245,29 @@ def test_run_tflite_model(
 
 def convert_model_to_tflite(
     model: keras.Model,
-    save_path: str,
+    save_path: Union[str, Path],
     dataset: Optional[tf.data.Dataset] = None,
-    num_dataset_samples: int = 64,
+    num_dataset_samples: int = 16,
 ) -> List[Path]:
 
     output_files = []
     save_path = Path(save_path)
-    LOGGER.info(f"Exporting model")
-    save_dir: Path = save_path.parent
-    save_dir.mkdir(parents=True, exist_ok=True)
-    LOGGER.info(f"Converting model to tflite format ")
-    tflite_model = convert_default(model)
-    LOGGER.info(f"Model converted successfully ")
-    test_run_tflite_model(tflite_model, num_test_steps=1)
-    model_save_path = save_path.with_suffix(TFLITE_SUFFIX)
-    with model_save_path.open("wb") as file:
-        file.write(tflite_model)
 
-    output_files.append(model_save_path)
-    LOGGER.info(f"Model saved to {model_save_path}")
+    LOGGER.info(f"Exporting model to TFLite: {save_path}")
+    try:
+        tflite_f32_model = TFLiteModel.from_keras_model(model, optimizations=[])
+        tflite_f32_model.test_predict(1)
+        path = tflite_f32_model.dump(save_path.with_suffix(TFLITE_F32_SUFFIX))
+        output_files.append(path)
+    except RuntimeError as error:
+        LOGGER.warning("Cannot generate float32 model. Probably you are trying to "
+                       "convert model with quantized (or fake quantized) nodes. "
+                       f"Error: {error}")
+
+    tflite_dr_model = TFLiteModel.from_keras_model(model)
+    tflite_dr_model.test_predict(1)
+    path = tflite_dr_model.dump(save_path.with_suffix(TFLITE_DR_SUFFIX))
+    output_files.append(path)
 
     if dataset is not None:
         LOGGER.info(f"Converting quantized model")
@@ -274,14 +290,13 @@ def convert_model_to_tflite(
             )
             assert dataset_input_shapes[name] == bs, msg
 
-        tflite_model = convert_quantized(model, dataset, num_dataset_samples)
-        LOGGER.info(f"Model converted successfully ")
-        test_run_tflite_model(tflite_model, num_test_steps=1)
-        model_save_path = save_path.with_suffix(QUANTIZED_TFLITE_SUFFIX)
-        with model_save_path.open("wb") as file:
-            file.write(tflite_model)
-        output_files.append(model_save_path)
-        LOGGER.info(f"Quantized model saved to {model_save_path}")
+        tflite_fr_model = TFLiteModel.from_keras_model(
+            model, dataset=dataset, num_samples=num_dataset_samples
+        )
+        tflite_fr_model.test_predict(1)
+        path = tflite_fr_model.dump(save_path.with_suffix(TFLITE_FR_SUFFIX))
+        output_files.append(path)
+
     return output_files
 
 

@@ -51,7 +51,7 @@ class BuilderTest(tf.test.TestCase):
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, beta_2=0.99)
         model.compile(optimizer, **builder.get_model_compile_args())
-        model.fit(prepared_train_dataset, epochs=1, steps_per_epoch=5)
+        model.fit(prepared_train_dataset, epochs=1, steps_per_epoch=2)
         model.save_weights(f"{self.test_dir}/model.h5")
 
         builder.convert_to_tflite(
@@ -59,7 +59,7 @@ class BuilderTest(tf.test.TestCase):
             save_path=f"{self.test_dir}/model.tflite",
             export_batch_size=1,
             raw_dataset=raw_dataset,
-            num_dataset_samples=2,
+            num_dataset_samples=1,
             num_test_steps=1,
             merge_feature_maps=True,
             postprocess_outputs=True,
@@ -71,14 +71,14 @@ class BuilderTest(tf.test.TestCase):
         )
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, beta_2=0.99)
         qmodel.compile(optimizer, **builder.get_model_compile_args())
-        qmodel.fit(prepared_train_dataset, epochs=1, steps_per_epoch=5)
+        qmodel.fit(prepared_train_dataset, epochs=1, steps_per_epoch=2)
 
         builder.convert_to_tflite(
             qmodel,
             save_path=f"{self.test_dir}/qmodel.tflite",
             export_batch_size=1,
             raw_dataset=raw_dataset,
-            num_dataset_samples=2,
+            num_dataset_samples=1,
             num_test_steps=1,
             merge_feature_maps=True,
             postprocess_outputs=True,
