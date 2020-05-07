@@ -26,42 +26,47 @@ class MobileNetV2Backbone(Backbone):
         self,
         input_shape: Tuple[int, int, int],
         alpha: float = 1.0,
+        num_last_blocks: int = 1,
         min_fm_size: Optional[int] = None,
         weights: Optional[str] = None,
     ):
-
-        backbone = get_mobilenet_v2(
+        self.num_last_blocks = num_last_blocks
+        backbone = build_mobilenet_v2(
             input_shape=input_shape,
             alpha=alpha,
-            include_top=False,
             weights=weights,
             input_tensor=None,
             min_fm_size=min_fm_size,
         )
 
+        if len(backbone.outputs) < num_last_blocks:
+            raise ValueError(
+                "Cannot create Backbone, the number of requested num_last_blocks "
+                f"({num_last_blocks}) if bigger than the number of resulting block "
+                f"({len(backbone.outputs)}). Try do decrease min_fm_size value."
+            )
+
         super().__init__(input_shape=input_shape, backbone=backbone)
 
     @property
     def num_fm_maps(self) -> int:
-        return 1
+        return self.num_last_blocks
 
     def forward(
         self, inputs: tf.Tensor, is_training: bool = False, quantized: bool = False
     ) -> List[tf.Tensor]:
         outputs = self.backbone_forward(inputs, quantized=quantized)
-        return [outputs]
+        if isinstance(outputs, tf.Tensor):
+            return [outputs]
+        return outputs[-self.num_last_blocks:]
 
 
-def get_mobilenet_v2(
+def build_mobilenet_v2(
     input_shape=None,
     alpha=1.0,
-    include_top=True,
     weights="imagenet",
     input_tensor=None,
-    pooling=None,
-    classes=1000,
     min_fm_size: Optional[int] = None,
-    **kwargs,
 ):
     """Instantiates the MobileNetV2 architecture.
 
@@ -105,10 +110,6 @@ def get_mobilenet_v2(
                 2D tensor.
             - `max` means that global max pooling will
                 be applied.
-        classes: optional number of classes to classify images
-            into, only to be specified if `include_top` is True, and
-            if no `weights` argument is specified.
-
     # Returns
         A Keras model instance.
 
@@ -134,12 +135,6 @@ def get_mobilenet_v2(
             "`None` (random initialization), `imagenet` "
             "(pre-training on ImageNet), "
             "or the path to the weights file to be loaded."
-        )
-
-    if weights == "imagenet" and include_top and classes != 1000:
-        raise ValueError(
-            'If using `weights` as `"imagenet"` with `include_top` '
-            "as true, `classes` should be 1000"
         )
 
     # Determine proper input shape and default size.
@@ -232,7 +227,7 @@ def get_mobilenet_v2(
         default_size=default_size,
         min_size=32,
         data_format=backend.image_data_format(),
-        require_flatten=include_top,
+        require_flatten=False,
         weights=weights,
     )
 
@@ -467,18 +462,7 @@ def get_mobilenet_v2(
         expansion=6,
         block_id=16,
     )
-
-    outputs.append(x)
-    last_block_filters = x.shape[-1]
-
-    x = layers.Conv2D(last_block_filters, kernel_size=1, use_bias=False, name="Conv_1")(
-        x
-    )
-    x = layers.BatchNormalization(
-        axis=channel_axis, epsilon=1e-3, momentum=0.99, name="Conv_1_bn"
-    )(x)
-    x = layers.ReLU(6.0, name="out_relu")(x)
-
+    print("outputs: ", outputs)
     # Ensure that the model takes into account
     # any potential predecessors of `input_tensor`.
     if input_tensor is not None:
@@ -487,38 +471,25 @@ def get_mobilenet_v2(
         inputs = img_input
 
     # Create model.
-    model = models.Model(inputs, x, name="mobilenetv2_%0.2f_%s" % (alpha, rows))
+    model = models.Model(inputs, outputs, name="mobilenetv2_%0.2f_%s" % (alpha, rows))
 
     if weights is not None:
         LOGGER.info(f"Loading pre-trained model weights: {weights}")
 
     # Load weights.
     if weights == "imagenet":
-        if include_top:
-            model_name = (
-                "mobilenet_v2_weights_tf_dim_ordering_tf_kernels_"
-                + str(alpha)
-                + "_"
-                + str(rows)
-                + ".h5"
-            )
-            weight_path = BASE_WEIGHT_PATH + model_name
-            weights_path = keras_utils.get_file(
-                model_name, weight_path, cache_subdir="models"
-            )
-        else:
-            model_name = (
-                "mobilenet_v2_weights_tf_dim_ordering_tf_kernels_"
-                + str(alpha)
-                + "_"
-                + str(rows)
-                + "_no_top"
-                + ".h5"
-            )
-            weight_path = BASE_WEIGHT_PATH + model_name
-            weights_path = keras_utils.get_file(
-                model_name, weight_path, cache_subdir="models"
-            )
+        model_name = (
+            "mobilenet_v2_weights_tf_dim_ordering_tf_kernels_"
+            + str(alpha)
+            + "_"
+            + str(rows)
+            + "_no_top"
+            + ".h5"
+        )
+        weight_path = BASE_WEIGHT_PATH + model_name
+        weights_path = keras_utils.get_file(
+            model_name, weight_path, cache_subdir="models"
+        )
         model.load_weights(weights_path, skip_mismatch=True, by_name=True)
     elif weights is not None:
         model.load_weights(weights, skip_mismatch=True)
@@ -527,8 +498,12 @@ def get_mobilenet_v2(
 
 
 def inverted_res_block(x, outputs, min_fm_size, **kwargs):
+    if x.shape[1] == min_fm_size:
+        return x
+
     if x.shape[1] // kwargs.get("stride") >= min_fm_size:
+        x = _inverted_res_block(x, **kwargs)
+        print(f" > stride={kwargs.get('stride')} shape={x.shape}")
         if kwargs.get("stride") == 2:
             outputs.append(x)
-        x = _inverted_res_block(x, **kwargs)
     return x

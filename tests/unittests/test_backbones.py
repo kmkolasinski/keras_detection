@@ -5,6 +5,7 @@ import tensorflow as tf
 
 import keras_detection.utils.testing_utils as utils
 from keras_detection.backbones import resnet
+from keras_detection.backbones import mobilenetv2_customized as mnetv2
 from keras_detection.backbones import fpn
 from keras_detection.datasets.datasets_ops import from_numpy_generator
 from keras_detection.ops.tflite_ops import TFLiteModel, convert_model_to_tflite
@@ -29,6 +30,22 @@ class ResNetBackboneTest(tf.test.TestCase):
         inputs = tf.keras.layers.Input(shape=[image_dim, image_dim, 3])
 
         feature_maps = backbone.forward(inputs)
+        quantized_feature_maps = backbone.forward(inputs, quantized=True)
+
+
+class MobileNetV2BackboneTest(tf.test.TestCase):
+    def test_quantize_forward(self):
+
+        image_dim = 64
+        backbone = mnetv2.MobileNetV2Backbone(
+            input_shape=(image_dim, image_dim, 3), min_fm_size=4, num_last_blocks=2
+        )
+
+        inputs = tf.keras.layers.Input(shape=[image_dim, image_dim, 3])
+
+        feature_maps = backbone.forward(inputs)
+        self.assertEqual(len(feature_maps), 2)
+        print(feature_maps)
         quantized_feature_maps = backbone.forward(inputs, quantized=True)
 
 
@@ -99,3 +116,13 @@ class FPNBackboneTest(utils.BaseUnitTest):
             model, dataset=raw_dataset, num_samples=2
         )
         tflite_model.test_predict()
+
+
+class FPNBackboneMobileNetTest(FPNBackboneTest):
+    def build_fpn(self, num_first_blocks: int):
+        backbone = mnetv2.MobileNetV2Backbone(
+            input_shape=(self.image_dim, self.image_dim, 3),
+            min_fm_size=8,
+            num_last_blocks=2,
+        )
+        return fpn.FPNBackbone(backbone, depth=32, num_first_blocks=num_first_blocks)
