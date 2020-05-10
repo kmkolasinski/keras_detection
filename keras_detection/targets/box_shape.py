@@ -6,6 +6,7 @@ import tensorflow as tf
 from numba import jit
 
 from keras_detection import FeatureMapPredictionTarget
+from keras_detection.api import OutputTensorType
 from keras_detection.ops import np_frame_ops
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 
@@ -15,6 +16,10 @@ class BoxSizeTarget(FeatureMapPredictionTarget):
     @property
     def num_outputs(self) -> int:
         return 2
+
+    @property
+    def output_tensor_type(self) -> OutputTensorType:
+        return OutputTensorType.BOX_SIZE
 
     @property
     def frame_required_fields(self) -> List[str]:
@@ -64,6 +69,10 @@ class BoxOffsetTarget(FeatureMapPredictionTarget):
         return 2
 
     @property
+    def output_tensor_type(self) -> OutputTensorType:
+        return OutputTensorType.BOX_OFFSET
+
+    @property
     def frame_required_fields(self) -> List[str]:
         return ["boxes"]
 
@@ -77,12 +86,21 @@ class BoxOffsetTarget(FeatureMapPredictionTarget):
             batch_frame.num_rows,
         )
 
+    def postprocess_predictions(
+            self, fm_desc: FeatureMapDesc, predictions: tf.Tensor
+    ) -> tf.Tensor:
+        raise NotImplementedError()
+
 
 @dataclass
 class BoxShapeTarget(FeatureMapPredictionTarget):
     @property
     def num_outputs(self) -> int:
         return 4
+
+    @property
+    def output_tensor_type(self) -> OutputTensorType:
+        return OutputTensorType.BOX_SHAPE
 
     @property
     def frame_required_fields(self) -> List[str]:

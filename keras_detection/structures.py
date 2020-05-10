@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from typing import Tuple, Optional, TypeVar, Generic, Any, List, Iterable, Dict
-
+import dacite
 import dataclasses as dc
 import numpy as np
 import tensorflow as tf
@@ -20,6 +20,7 @@ class DataClass:
         return dc.replace(self, **kwargs)
 
     def to_dict(self) -> Dict:
+        # Use this function in tensorflow C++ graph code
         # TypeError: can't pickle _thread.RLock objects
         return {k: v for k, v in zip(self.non_empty_names, self.non_empty_values)}
 
@@ -45,6 +46,10 @@ class DataClass:
     @classmethod
     def from_dict(cls, params: Dict) -> "DataClass":
         return cls(**params)
+
+    @property
+    def asdict(self) -> Dict:
+        return dc.asdict(self)
 
     @classmethod
     def from_names_and_values(

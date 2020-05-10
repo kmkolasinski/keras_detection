@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict, Union
 import tensorflow as tf
+
+from keras_detection.api import OutputTensorType
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 
 
@@ -15,6 +17,11 @@ class FeatureMapPredictionTarget(ABC):
     @property
     @abstractmethod
     def num_outputs(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def output_tensor_type(self) -> OutputTensorType:
         pass
 
     @property

@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from numba import jit
 from keras_detection import FeatureMapPredictionTarget
+from keras_detection.api import OutputTensorType
 from keras_detection.ops import np_frame_ops
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 
@@ -16,6 +17,10 @@ class MulticlassTarget(FeatureMapPredictionTarget):
     @property
     def num_outputs(self) -> int:
         return self.num_classes + self.add_dustbin
+
+    @property
+    def output_tensor_type(self) -> OutputTensorType:
+        return OutputTensorType.CLASSES
 
     @property
     def dustbin_index(self) -> int:

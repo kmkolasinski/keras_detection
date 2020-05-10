@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from itertools import chain
 from pathlib import Path
@@ -9,8 +10,10 @@ import tensorflow as tf
 import keras_detection.models.box_detector as box_detector
 import keras_detection.ops.tflite_ops as tflite_ops
 import keras_detection.tasks as dt
+from keras_detection.api import LabelDescription, ModelMetadata, OutputTensorType, TaskType
 from keras_detection.backbones.base import Backbone
 from keras_detection.datasets.datasets_ops import prepare_dataset
+import keras_detection.ops.tflite_metadata as tflite_metadata_ops
 from keras_detection.structures import ImageData
 from keras_detection.targets.base import FeatureMapDesc
 
@@ -337,6 +340,7 @@ class FPNBuilder:
         merge_feature_maps: bool = False,
         verify_converted_models: bool = True,
         convert_quantized_model: bool = False,
+        metadata: Optional[ModelMetadata] = None
     ) -> Tuple[keras.Model, List[Path]]:
 
         dataset = None
@@ -375,7 +379,23 @@ class FPNBuilder:
                     batch_size=export_batch_size,
                 )
 
+        if metadata is not None:
+            for model_path in output_tflite_models:
+                self.append_metadata(model_path, metadata)
+
         return export_model, output_tflite_models
+
+    def append_metadata(
+            self,
+            model_path: Path,
+            metadata: ModelMetadata
+    ):
+        LOGGER.info(f"Appending metadata to model: {model_path}")
+        output_types = [t.target_builder.output_tensor_type for t in self.tasks]
+        buffer = tflite_metadata_ops.build_metadata(
+            output_types=output_types, **metadata.asdict
+        )
+        tflite_metadata_ops.dump_metadata(model_path=model_path, metadata_buf=buffer)
 
     def verify_converted_model(
         self,

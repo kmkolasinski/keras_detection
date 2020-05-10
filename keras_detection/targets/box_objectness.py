@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from numba import jit
 from keras_detection import FeatureMapPredictionTarget
+from keras_detection.api import OutputTensorType
 from keras_detection.ops import np_frame_ops
 from keras_detection.structures import FeatureMapDesc, LabelsFrame
 
@@ -17,6 +18,10 @@ class BoxCenterObjectnessTarget(FeatureMapPredictionTarget):
     @property
     def num_outputs(self) -> int:
         return self.depth
+
+    @property
+    def output_tensor_type(self) -> OutputTensorType:
+        return OutputTensorType.OBJECTNESS
 
     @property
     def frame_required_fields(self) -> List[str]:

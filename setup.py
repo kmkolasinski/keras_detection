@@ -23,7 +23,8 @@ setup(
         'imgaug>=0.4',
         'cached_property>=1.5',
         "cython==0.29.17",
-        "pycocotools==2.0.0"
+        "pycocotools==2.0.0",
+        "tflite-support==0.1.0a1"
     ],
     include_package_data=True
 )
