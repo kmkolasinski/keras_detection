@@ -16,6 +16,7 @@ LOGGER = tf.get_logger()
 keras = tf.keras
 
 
+TFLITE_SUFFIX = ".tflite"
 # No quantization, float32
 TFLITE_F32_SUFFIX = ".f32.tflite"
 # Dynamic range quantized
