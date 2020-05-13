@@ -19,7 +19,9 @@ class ModelMetadata(DataClass):
     # list of length equal to num_classes or 1 when only objectness is returned
     labels: List[LabelDescription]
     # optional additional output interpretation information
-    interpretation: str = "default"
+    output_interpretation: str = "default"
+    # encoded json with optional task parameters
+    task_params: str = ""
     version: str = "default"
 
 

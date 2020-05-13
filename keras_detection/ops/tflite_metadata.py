@@ -24,9 +24,10 @@ def build_metadata(
     version: str,
     labels: List[LabelDescription],
     output_types: List[OutputTensorType],
-    interpretation: str = "",
+    output_interpretation: str = "",
     task: Optional[str] = None,
     author: str = "",
+    task_params: str = ""
 ) -> bytearray:
     """
 
@@ -35,9 +36,10 @@ def build_metadata(
         version:
         labels:
         output_types:
-        interpretation:
+        output_interpretation:
         task:
         author:
+        task_params:
 
     Returns:
 
@@ -62,8 +64,9 @@ def build_metadata(
         name=name,
         version=version,
         task=task,
-        interpretation=interpretation,
+        output_interpretation=output_interpretation,
         labels=labels,
+        task_params=task_params,
     )
 
     model_meta = _metadata_fb.ModelMetadataT()

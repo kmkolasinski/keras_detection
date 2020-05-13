@@ -73,7 +73,7 @@ class TFLiteMetadataOpsTest(BaseUnitTest):
 
         exp_metadata = {
             "name": "test-name",
-            "description": '{"name": "test-name", "task": "object_detection", "labels": [{"name": "box", "uuid": "box_uuid"}, {"name": "other_box", "uuid": "other_box_uuid"}], "interpretation": "default", "version": "default"}',
+            "description": '{"name": "test-name", "task": "object_detection", "labels": [{"name": "box", "uuid": "box_uuid"}, {"name": "other_box", "uuid": "other_box_uuid"}], "output_interpretation": "default", "task_params": "", "version": "default"}',
             "version": "default",
             "subgraph_metadata": [
                 {
@@ -110,7 +110,7 @@ class TFLiteMetadataOpsTest(BaseUnitTest):
 
         exp_metadata = {
             "name": "test-name",
-            "description": '{"name": "test-name", "task": "object_localization", "labels": [{"name": "box", "uuid": "box_uuid"}, {"name": "other_box", "uuid": "other_box_uuid"}], "interpretation": "default", "version": "default"}',
+            "description": '{"name": "test-name", "task": "object_localization", "labels": [{"name": "box", "uuid": "box_uuid"}, {"name": "other_box", "uuid": "other_box_uuid"}], "output_interpretation": "default", "task_params": "", "version": "default"}',
             "version": "default",
             "subgraph_metadata": [
                 {
