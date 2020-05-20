@@ -44,7 +44,7 @@ class OutputTensorType(Enum):
     # [:, num_classes] float
     CLASSES = "classes"
     # [:, (dy, dx, center_y, center_x)] float
-    VECTOR_FIELD_2D = "classes"
+    VECTOR_FIELD_2D = "vector_field_2d"
 
 
 class InputTensorsType(Enum):
