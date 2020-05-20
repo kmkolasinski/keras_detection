@@ -29,6 +29,7 @@ class TaskType(Enum):
     OBJECT_LOCALIZATION = "object_localization"
     OBJECT_DETECTION = "object_detection"
     OBJECT_CLASSIFICATION = "object_classification"
+    VECTOR_FIELD_ESTIMATION = "vector_field_2d_estimation"
 
 
 class OutputTensorType(Enum):
@@ -42,6 +43,8 @@ class OutputTensorType(Enum):
     OBJECTNESS = "objectness"
     # [:, num_classes] float
     CLASSES = "classes"
+    # [:, (dy, dx, center_y, center_x)] float
+    VECTOR_FIELD_2D = "classes"
 
 
 class InputTensorsType(Enum):
