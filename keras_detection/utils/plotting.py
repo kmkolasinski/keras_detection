@@ -220,6 +220,58 @@ def draw_boxes(
     return plot_to_image(figure, format=fmt)
 
 
+def draw_vector_field_2d(
+        image: Union[np.ndarray, tf.Tensor],
+        vector_field_2d_map: Union[np.ndarray, tf.Tensor],
+        objectness: Optional[Union[np.ndarray, tf.Tensor]] = None,
+        score_threshold: float = 0.5,
+        figsize: Tuple[int, int] = (5, 5),
+        fmt: str = "png",
+        subtitle: str = "",
+        linewidth: float = 0.5,
+        skip: int = 1,
+        **kwargs,
+) -> Image.Image:
+
+    if objectness is None:
+        objectness = np.ones_like(vector_field_2d_map)[..., 0]
+
+    if isinstance(image, tf.Tensor):
+        image = image.numpy()
+    if isinstance(objectness, tf.Tensor):
+        objectness = objectness.numpy()
+    if isinstance(vector_field_2d_map, tf.Tensor):
+        vector_field_2d_map = vector_field_2d_map.numpy()
+
+    height, width = image.shape[:2]
+    if len(vector_field_2d_map.shape) == 3:
+        vector_field_2d_map = vector_field_2d_map.reshape([-1, 4])
+        assert len(objectness.shape) == 3 or len(objectness.shape) == 2
+        objectness = objectness.reshape([-1])
+
+    elif len(vector_field_2d_map.shape) == 2:
+        assert len(objectness.shape) == 1
+        assert objectness.shape[0] == vector_field_2d_map.shape[0]
+    else:
+        raise ValueError("Unsupported shape of input arrays!")
+
+    indices = np.where(objectness > score_threshold)[0]
+
+    figure = plt.figure(figsize=figsize)
+    ax = figure.add_subplot(111, aspect="equal")
+    plt.title(f"Vector field 2D {objectness.shape} {subtitle}")
+    plt.imshow(image)
+
+    for idx in indices[::skip]:
+        dy, dx, y, x = vector_field_2d_map[idx] * np.array([1, 1, height, width])
+        color = "w"
+        plt.arrow(x, y, dx, dy, color=color, width=1.5 * linewidth, alpha=objectness[idx])
+        color = "m"
+        plt.arrow(x, y, dx, dy, color=color, width=linewidth, alpha=objectness[idx])
+
+    return plot_to_image(figure, format=fmt)
+
+
 def labels_to_colors(num_classes: int, brightness: float = 1) -> Dict[int, float]:
     hsv = [(i / max(num_classes - 1, 1), 1, brightness) for i in range(num_classes)]
     return {l: colorsys.hsv_to_rgb(*c) for l, c in enumerate(hsv)}
