@@ -17,6 +17,7 @@ setup(
         'numpy==1.16.4',
         'tsalib==0.2.1',
         'matplotlib>=3.1.*',
+        'cython==0.29.*',
         'image-classifiers==1.0.0',
         'tqdm>=4.43.0',
         'tensorflow-addons>=0.8.*',
