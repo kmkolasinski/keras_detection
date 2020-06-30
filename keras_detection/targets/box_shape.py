@@ -146,6 +146,25 @@ class BoxShapeTarget(FeatureMapPredictionTarget):
         predictions = (predictions + shift_map) / fm_scale_map
         return predictions
 
+    def to_tf_boxes(self, postprocessed_boxes: tf.Tensor) -> tf.Tensor:
+        """
+
+        Args:
+            postprocessed_boxes: boxes in format [batch_size, fm_height, fm_width, (h, w, cy, cx)]
+
+        Returns:
+            boxes in format [batch_size, fm_height, fm_width, (ymin, xmin, ymax, xmax)]
+        """
+        heights, widths, y_centers, x_centers = tf.split(postprocessed_boxes, 4, axis=-1)
+
+        y_min = y_centers - heights / 2
+        y_max = y_centers + heights / 2
+        x_min = x_centers - widths / 2
+        x_max = x_centers + widths / 2
+        boxes = tf.stack([y_min, x_min, y_max, x_max], axis=-1)
+        boxes = tf.squeeze(boxes, axis=-2)
+        return boxes
+
 
 @dataclass
 class MeanBoxSizeTarget(BoxSizeTarget):

@@ -141,6 +141,8 @@ def convert_default(
     converter = from_keras_model(model)
     converter.experimental_new_converter = True
     converter.experimental_new_quantizer = True
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
+                                           tf.lite.OpsSet.SELECT_TF_OPS]
     converter.optimizations = optimizations
 
     return converter.convert()

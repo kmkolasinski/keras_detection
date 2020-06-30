@@ -68,7 +68,8 @@ class SoftmaxCELoss(BCELoss):
 
 
 class L1Loss(FeatureMapPredictionTargetLoss):
-    def compute_loss(
+
+    def compute_per_anchor_loss(
         self, y_true: (B, H, W, C), y_pred: (B, H, W, C), weights: (B, H, W, 1)
     ) -> tf.Tensor:
 
@@ -76,6 +77,12 @@ class L1Loss(FeatureMapPredictionTargetLoss):
         diff = y_pred - y_true
         loss: (B, H, W, 1) = tf.reduce_sum(tf.abs(diff), -1, keepdims=True)
         loss: (B, H * W) = tf.reshape(loss * weights, [-1, fm_height * fm_width])
+        return loss
+
+    def compute_loss(
+        self, y_true: (B, H, W, C), y_pred: (B, H, W, C), weights: (B, H, W, 1)
+    ) -> tf.Tensor:
+        loss: (B, H * W) = self.compute_per_anchor_loss(y_true, y_pred, weights)
         loss: (B,) = tf.reduce_mean(loss, -1)
         return loss
 
@@ -86,9 +93,7 @@ class CenteredBoxesIOULoss(FeatureMapPredictionTargetLoss):
     ) -> tf.Tensor:
 
         fm_height, fm_width = y_pred.shape[1:3]
-
         max_value: (B, H, W) = tf.maximum(y_true, y_pred) + 1e-6
-
         iou = tf.minimum(y_true, y_pred) / max_value
         iou = tf.clip_by_value(iou, 1e-5, 1.0)
         log_loss_iou = -weights * tf.math.log(iou)

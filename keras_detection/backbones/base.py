@@ -25,6 +25,10 @@ class Backbone(ABC):
         return self._image_input_shape
 
     @property
+    def output_shapes(self) -> List[Tuple[int, int, int]]:
+        raise NotImplementedError()
+
+    @property
     @abstractmethod
     def num_fm_maps(self) -> int:
         pass

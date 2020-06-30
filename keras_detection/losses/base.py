@@ -6,9 +6,10 @@ keras = tf.keras
 
 
 class FeatureMapPredictionTargetLoss(tf.keras.losses.Loss, ABC):
-    def __init__(self, target_def: FeatureMapPredictionTarget, *args, **kwargs):
+    def __init__(self, target_def: FeatureMapPredictionTarget, per_anchor_loss: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_def = target_def
+        self.per_anchor_loss = per_anchor_loss
 
     @property
     def __name__(self) -> str:
@@ -28,8 +29,13 @@ class FeatureMapPredictionTargetLoss(tf.keras.losses.Loss, ABC):
     def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         y_true, weights = self.target_def.to_targets_and_weights(y_true)
 
+        fm_height, fm_width = y_pred.shape[1:3]
         if weights is None:
-            fm_height, fm_width = y_pred.shape[1:2]
             weights = tf.ones([1, fm_height, fm_width, 1])
+
+        if self.per_anchor_loss:
+            loss = self.compute_per_anchor_loss(y_true, y_pred, weights=weights)
+            loss = tf.reshape(loss, [-1, fm_height, fm_width])
+            return loss
 
         return self.compute_loss(y_true, y_pred, weights=weights)

@@ -1,5 +1,5 @@
 import tensorflow as tf
-import keras_detection.datasets as datasets_ops
+import keras_detection.datasets.datasets_ops as datasets_ops
 import keras_detection.utils.testing_utils as utils
 from keras_detection import ImageData
 

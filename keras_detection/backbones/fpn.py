@@ -30,6 +30,11 @@ class FPNBackbone(Backbone):
         )
 
     @property
+    def output_shapes(self) -> List[Tuple[int, int, int]]:
+        shapes = [shape[1:] for shape in self.fpn_backbone.output_shape]
+        return shapes[: self.num_first_blocks]
+
+    @property
     def num_fm_maps(self) -> int:
         return self.num_first_blocks
 

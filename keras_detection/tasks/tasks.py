@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Tuple, Optional
 from keras_detection.heads import Head, HeadFactory
 from keras_detection.losses import FeatureMapPredictionTargetLoss
 from keras_detection.metrics import FeatureMapPredictionTargetMetric
@@ -76,6 +76,15 @@ class FeatureMapPredictionTasks:
     @property
     def outputs_names(self) -> List[str]:
         return [self.fm_task_name(t) for t in self.tasks]
+
+    @property
+    def targets_outputs_shapes(self) -> List[Tuple[Optional[int], int, int, int]]:
+        shapes = []
+        for t in self.tasks:
+            nc = t.target_builder.num_outputs_with_weights
+            sh = (None, self.fm_desc.fm_height, self.fm_desc.fm_width, nc)
+            shapes.append(sh)
+        return shapes
 
     def fm_task_name(self, task: PredictionTask) -> str:
         return f"{self.name}/{task.name}"

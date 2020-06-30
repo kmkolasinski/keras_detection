@@ -129,6 +129,21 @@ class SingleConvHead(Head):
         return h
 
 
+class SingleConvPoolHead(SingleConvHead):
+
+    def build(
+        self, input_shape: Tuple[int, int, int], is_training: bool = False
+    ) -> keras.Model:
+        x = keras.layers.Input(shape=input_shape)
+        h = keras.layers.Conv2D(self._num_filters, kernel_size=3, padding="same")(x)
+        h = keras.layers.BatchNormalization()(h)
+        h = keras.layers.ReLU()(h)
+        h = keras.layers.GlobalAveragePooling2D()(h)
+        h = keras.layers.Dense(self.num_outputs, activation=None)(h)
+        h = keras.layers.Reshape([1, 1, self.num_outputs])(h)
+        return keras.Model(x, h, name=self.get_head_name(input_shape))
+
+
 class NoQuantizableSingleConvHead(SingleConvHead):
     def forward(
         self,
@@ -153,3 +168,7 @@ class SingleConvHeadFactory(HeadFactory):
             activation=activation,
             num_filters=num_filters,
         )
+
+
+class SingleConvPoolHeadFactory(SingleConvHeadFactory):
+    pass

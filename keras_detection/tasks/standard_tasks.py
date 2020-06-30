@@ -1,11 +1,11 @@
-from typing import Type, Union
+from typing import Type, Union, Optional
 
 import tensorflow as tf
 
 from keras_detection.heads import (
     SingleConvHeadFactory,
     SingleConvHead,
-    NoQuantizableSingleConvHead,
+    NoQuantizableSingleConvHead, HeadFactory,
 )
 import keras_detection.losses as losses
 from keras_detection import metrics as m
@@ -40,6 +40,7 @@ def get_objectness_task(
     from_logits: bool = False,
     obj_class: Union[Type, str] = box_obj.BoxCenterObjectnessTarget,
     quantizable: bool = True,
+    head_factory: Optional[HeadFactory] = None
 ) -> PredictionTaskDef:
 
     if isinstance(obj_class, str):
@@ -48,16 +49,19 @@ def get_objectness_task(
     target = obj_class(pos_weights=pos_weights, from_logits=from_logits)
     activation = None if from_logits else "sigmoid"
 
-    objectness_task = PredictionTaskDef(
-        name=name,
-        loss_weight=loss_weight,
-        target_builder=target,
-        head_factory=SingleConvHeadFactory(
+    if head_factory is None:
+        head_factory = SingleConvHeadFactory(
             num_outputs=target.num_outputs,
             num_filters=num_filters,
             activation=activation,
             htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
-        ),
+        )
+
+    objectness_task = PredictionTaskDef(
+        name=name,
+        loss_weight=loss_weight,
+        target_builder=target,
+        head_factory=head_factory,
         loss=losses.BCELoss(
             target,
             label_smoothing=label_smoothing,
@@ -76,21 +80,27 @@ def get_objectness_task(
 
 def get_box_shape_task(
     name: str = "box_shape",
+    prefix: str = "",
     loss_weight: float = 10.0,
     num_filters: int = 64,
     quantizable: bool = True,
+    head_factory: Optional[HeadFactory] = None
 ) -> PredictionTaskDef:
     target = STANDARD_BOX_SHAPE_TARGETS[name]
-    return PredictionTaskDef(
-        name=name,
-        loss_weight=loss_weight,
-        target_builder=target,
-        head_factory=SingleConvHeadFactory(
+
+    if head_factory is None:
+        head_factory = SingleConvHeadFactory(
             num_outputs=target.num_outputs,
             num_filters=num_filters,
             activation=None,
             htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
-        ),
+        )
+
+    return PredictionTaskDef(
+        name=prefix + name,
+        loss_weight=loss_weight,
+        target_builder=target,
+        head_factory=head_factory,
         loss=losses.L1Loss(target),
         metrics=[],
     )
@@ -107,6 +117,7 @@ def get_multiclass_task(
     fl_gamma: float = 2.0,
     num_filters: int = 64,
     quantizable: bool = True,
+    head_factory: Optional[HeadFactory] = None
 ) -> PredictionTaskDef:
     target = MulticlassTarget(num_classes=num_classes)
     if activation == "sigmoid":
@@ -136,16 +147,19 @@ def get_multiclass_task(
     else:
         raise ValueError("Invalid activation type")
 
-    return PredictionTaskDef(
-        name=name,
-        loss_weight=loss_weight,
-        target_builder=target,
-        head_factory=SingleConvHeadFactory(
+    if head_factory is None:
+        head_factory = SingleConvHeadFactory(
             num_outputs=target.num_outputs,
             num_filters=num_filters,
             activation=activation,
             htype=SingleConvHead if quantizable else NoQuantizableSingleConvHead,
-        ),
+        )
+
+    return PredictionTaskDef(
+        name=name,
+        loss_weight=loss_weight,
+        target_builder=target,
+        head_factory=head_factory,
         loss=loss,
         metrics=[m.MulticlassAccuracyMetric(target)],
     )

@@ -2,10 +2,17 @@ import tensorflow as tf
 import keras_detection.utils.testing_utils as utils
 from keras_detection import ImageData, LabelsFrame, FeatureMapDesc
 from keras_detection.targets.box_classes import MulticlassTarget
-from keras_detection.targets.box_objectness import BoxCenterObjectnessTarget, \
-    SmoothBoxCenterObjectnessTarget, BoxCenterIgnoreMarginObjectnessTarget
-from keras_detection.targets.box_shape import BoxSizeTarget, BoxOffsetTarget, \
-    BoxShapeTarget, MeanBoxSizeTarget
+from keras_detection.targets.box_objectness import (
+    BoxCenterObjectnessTarget,
+    SmoothBoxCenterObjectnessTarget,
+    BoxCenterIgnoreMarginObjectnessTarget,
+)
+from keras_detection.targets.box_shape import (
+    BoxSizeTarget,
+    BoxOffsetTarget,
+    BoxShapeTarget,
+    MeanBoxSizeTarget,
+)
 
 utils.maybe_enable_eager_mode()
 
@@ -28,9 +35,7 @@ class TargetsTest(tf.test.TestCase):
         image_data = self.sample_batch()
         tb = BoxCenterObjectnessTarget(pos_weights=10)
         targets = tb.get_targets_tensors(self.fm_desc, image_data.labels)
-        self.assertEqual(
-            targets.shape, [self.bs, *self.fm_size, 2]
-        )
+        self.assertEqual(targets.shape, [self.bs, *self.fm_size, 2])
 
     def test_objectness_target_builder2(self):
         tb = BoxCenterObjectnessTarget()
@@ -43,17 +48,13 @@ class TargetsTest(tf.test.TestCase):
         image_data = self.sample_batch()
         tb = SmoothBoxCenterObjectnessTarget(pos_weights=10)
         targets = tb.get_targets_tensors(self.fm_desc, image_data.labels)
-        self.assertEqual(
-            targets.shape, [self.bs, *self.fm_size, 2]
-        )
+        self.assertEqual(targets.shape, [self.bs, *self.fm_size, 2])
 
     def test_ignore_margin_objectness_target_builder(self):
         image_data = self.sample_batch()
         tb = BoxCenterIgnoreMarginObjectnessTarget(pos_weights=10)
         targets = tb.get_targets_tensors(self.fm_desc, image_data.labels)
-        self.assertEqual(
-            targets.shape, [self.bs, *self.fm_size, 2]
-        )
+        self.assertEqual(targets.shape, [self.bs, *self.fm_size, 2])
 
     def test_box_size_target_builder(self):
         image_data = self.sample_batch()
@@ -103,15 +104,11 @@ class TargetsTest(tf.test.TestCase):
     def test_box_shape_target_postprocessing(self):
 
         frame = LabelsFrame(
-            boxes=tf.constant([[[0.5, 0.3, 0.6, 0.6]]]),
-            num_rows=tf.constant([1])
+            boxes=tf.constant([[[0.5, 0.3, 0.6, 0.6]]]), num_rows=tf.constant([1])
         )
 
         fm_desc = FeatureMapDesc(
-            fm_height=4,
-            fm_width=3,
-            image_height=12,
-            image_width=6,
+            fm_height=4, fm_width=3, image_height=12, image_width=6
         )
 
         tb = BoxShapeTarget()
@@ -120,6 +117,10 @@ class TargetsTest(tf.test.TestCase):
         recon = tb.postprocess_predictions(fm_desc, y_true)
         self.assertAllClose(recon[0, 2, 1], [0.1, 0.3, 0.55, 0.45])
         self.assertAllClose(weights[0, 2, 1], [1.0])
+        tf_boxes = tb.to_tf_boxes(recon)
+        self.assertAllClose(
+            tf_boxes[0, 2, 1], [0.55 - 0.05, 0.45 - 0.15, 0.55 + 0.05, 0.45 + 0.15]
+        )
 
     def test_mean_box_size_target_builder(self):
         image_data = self.sample_batch()
@@ -128,5 +129,3 @@ class TargetsTest(tf.test.TestCase):
         y_pred, weights = tb.to_targets_and_weights(targets)
         self.assertEqual(y_pred.shape, [self.bs, *self.fm_size, 2])
         self.assertEqual(weights.shape, [self.bs, *self.fm_size, 1])
-
-
