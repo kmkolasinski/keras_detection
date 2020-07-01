@@ -328,6 +328,7 @@ class RPN(keras.layers.Layer):
         boxes = self.rpn_box_shape_task.target_builder.postprocess_predictions(
             fm.fm_desc, box_shape
         )
+        boxes = self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
         return boxes, rpn_loss_map
 
     def sample_proposal_boxes(self, rpn_predictions: List[tf.Tensor], num_samples: int):
