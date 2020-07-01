@@ -82,6 +82,7 @@ class FasterRCNNBuilder:
             rpn_outputs, postprocess=False
         )
         sampled_anchors = None
+        rpn_scores = None
         if is_training:
             rpn_targets_inputs = self.rpn.get_targets_input_tensors(
                 batch_size=batch_size
@@ -101,7 +102,7 @@ class FasterRCNNBuilder:
         else:
             rpn_targets_inputs = {}
             rcnn_targets_inputs = {}
-            rpn_boxes, sampled_anchors = self.rpn.sample_proposal_boxes(
+            rpn_scores, rpn_boxes, sampled_anchors = self.rpn.sample_proposal_boxes(
                 rpn_outputs, self.roi_sampling.num_samples
             )
             crops = self.roi_sampling.roi_align([feature_maps[0], rpn_boxes])
@@ -113,8 +114,11 @@ class FasterRCNNBuilder:
 
         if sampled_anchors is not None:
             rcnn_predictions_raw["rcnn/anchors"] = sampled_anchors
+            rcnn_predictions_raw["rcnn/scores"] = rpn_scores
+            rcnn_predictions_raw["rcnn/boxes"] = rpn_boxes
 
         outputs = {}
+        outputs["feature_maps/fm0"] = feature_maps
         outputs.update(rpn_predictions_raw)
         outputs.update(rcnn_predictions_raw)
 
@@ -340,11 +344,13 @@ class RPN(keras.layers.Layer):
         batch_size = boxes.shape[0]
         sampled_boxes = []
         sampled_anchors = []
+        sampled_scores = []
         for i in range(batch_size):
             batch_boxes = tf.reshape(boxes[i, ...], [-1, 4])
+            batch_scores = tf.reshape(objectness[i, ...], [-1])
             batch_indices = tf.image.non_max_suppression(
                 batch_boxes,
-                tf.reshape(objectness[i, ...], [-1]),
+                batch_scores,
                 fm.fm_desc.fm_width * fm.fm_desc.fm_height,
                 iou_threshold=0.35,
                 score_threshold=0.5,
@@ -352,19 +358,25 @@ class RPN(keras.layers.Layer):
             selected_boxes = tf.gather(batch_boxes, batch_indices)
             selected_boxes = pad_or_slice(selected_boxes, num_samples)
 
+            selected_scores = tf.gather(batch_scores, batch_indices)
+            selected_scores = pad_or_slice(selected_scores, num_samples)
+
             batch_anchors = tf.gather(
-                tf.reshape(anchors[i, ...], [-1, 4]), batch_indices
+                tf.reshape(anchors[i, ..., 2:], [-1, 2]), batch_indices
             )
             batch_anchors = pad_or_slice(batch_anchors, num_samples)
 
             sampled_anchors.append(batch_anchors)
             sampled_boxes.append(selected_boxes)
+            sampled_scores.append(selected_scores)
 
         sampled_boxes = tf.stack(sampled_boxes, axis=0)
         sampled_anchors = tf.stack(sampled_anchors, axis=0)
-        print("sampled_boxes (test):", sampled_boxes)
-        print("sampled_anchors (test):", sampled_anchors)
-        return sampled_boxes, sampled_anchors
+        sampled_scores = tf.stack(sampled_scores, axis=0)
+        # print("sampled_boxes (test):", sampled_boxes)
+        # print("sampled_anchors (test):", sampled_anchors)
+        # print("sampled_anchors (test):", sampled_scores)
+        return sampled_scores, sampled_boxes, sampled_anchors
 
     def get_targets_input_tensors(
         self, batch_size: Optional[int] = None, prefix: str = "inputs/"
