@@ -337,6 +337,8 @@ class RPN(keras.layers.Layer):
             fm.fm_desc, box_shape
         )
 
+        boxes = self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
+
         anchors = self.rpn_box_shape_task.target_builder.postprocess_predictions(
             fm.fm_desc, tf.zeros_like(box_shape)
         )
