@@ -104,10 +104,12 @@ class BoxDetectionOutput(DataClass):
         y, c = np_frame_ops.boxes_centers(boxes)
         h, w = np_frame_ops.boxes_heights_widths(boxes)
         boxes = np.stack([h, w, y, c], axis=-1)
+        if scores is None:
+            scores = np.ones(shape=labels.shape)
         return BoxDetectionOutput(
             boxes=boxes,
             labels=labels,
-            scores=scores or np.ones(shape=labels.shape),
+            scores=scores,
             classes_scores=classes_scores or np.ones(shape=labels.shape),
         )
 
