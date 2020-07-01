@@ -359,6 +359,7 @@ class RPN(keras.layers.Layer):
             selected_boxes = pad_or_slice(selected_boxes, num_samples)
 
             selected_scores = tf.gather(batch_scores, batch_indices)
+            selected_scores = tf.reshape(selected_scores, [-1, 1])
             selected_scores = pad_or_slice(selected_scores, num_samples)
 
             batch_anchors = tf.gather(
