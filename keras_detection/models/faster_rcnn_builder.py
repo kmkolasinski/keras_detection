@@ -90,7 +90,7 @@ class FasterRCNNBuilder:
             rpn_boxes, rpn_loss_map = self.rpn.get_rpn_loss_map(
                 rpn_outputs, rpn_targets_inputs
             )
-            crops, crops_indices = self.roi_sampling(
+            crops, crops_boxes, crops_indices = self.roi_sampling(
                 [feature_maps[0], rpn_boxes, rpn_loss_map], training=is_training
             )
             rcnn_targets_inputs = self.rcnn.get_targets_input_tensors(
@@ -111,6 +111,11 @@ class FasterRCNNBuilder:
         rcnn_predictions_raw = self.rcnn.predictions_to_dict(
             rcnn_outputs, postprocess=False
         )
+
+        if is_training:
+            rcnn_predictions_raw["rcnn/crops"] = crops
+            rcnn_predictions_raw["rcnn/crops_boxes"] = crops_boxes
+            rcnn_predictions_raw["rcnn/crops_indices"] = crops_indices
 
         if sampled_anchors is not None:
             rcnn_predictions_raw["rcnn/anchors"] = sampled_anchors
@@ -443,9 +448,9 @@ class ROISamplingLayer(keras.layers.Layer):
         indices = fm_sampling.scores_to_gather_indices(rpn_loss_map, self.num_samples)
         # fm_sampling.sample_feature_map(tf.expand_dims(rpn_loss_map, -1), indices)
         sampled_boxes = fm_sampling.sample_feature_map(boxes, indices)
-        print("sampled_boxes:", sampled_boxes)
+        # print("sampled_boxes:", sampled_boxes)
         crops = self.roi_align([feature_map, sampled_boxes])
-        return crops, indices
+        return crops, sampled_boxes, indices
 
     def sample_targets_tensors(self, targets: Dict[str, tf.Tensor], indices: tf.Tensor):
         crops_targets = {}
