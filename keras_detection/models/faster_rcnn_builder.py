@@ -448,6 +448,8 @@ class ROISamplingLayer(keras.layers.Layer):
         indices = fm_sampling.scores_to_gather_indices(rpn_loss_map, self.num_samples)
         # fm_sampling.sample_feature_map(tf.expand_dims(rpn_loss_map, -1), indices)
         sampled_boxes = fm_sampling.sample_feature_map(boxes, indices)
+        indices = tf.stop_gradient(indices)
+        sampled_boxes = tf.stop_gradient(sampled_boxes)
         # print("sampled_boxes:", sampled_boxes)
         crops = self.roi_align([feature_map, sampled_boxes])
         return crops, sampled_boxes, indices
