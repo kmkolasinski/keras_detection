@@ -123,7 +123,7 @@ class FasterRCNNBuilder:
             rcnn_predictions_raw["rcnn/boxes"] = rpn_boxes
 
         outputs = {}
-        outputs["feature_maps/fm0"] = feature_maps
+        # outputs["feature_maps/fm0"] = feature_maps
         outputs.update(rpn_predictions_raw)
         outputs.update(rcnn_predictions_raw)
 
