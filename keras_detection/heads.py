@@ -137,7 +137,7 @@ class SingleConvPoolHead(SingleConvHead):
         x = keras.layers.Input(shape=input_shape)
         h = keras.layers.Conv2D(self._num_filters, kernel_size=3, padding="same")(x)
         h = keras.layers.BatchNormalization()(h)
-        h = keras.layers.ReLU()(h)
+        # h = keras.layers.ReLU()(h)
         h = keras.layers.GlobalAveragePooling2D()(h)
         h = keras.layers.Dense(self.num_outputs, activation=None)(h)
         h = keras.layers.Reshape([1, 1, self.num_outputs])(h)

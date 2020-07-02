@@ -83,8 +83,12 @@ class L1Loss(FeatureMapPredictionTargetLoss):
         self, y_true: (B, H, W, C), y_pred: (B, H, W, C), weights: (B, H, W, 1)
     ) -> tf.Tensor:
         loss: (B, H * W) = self.compute_per_anchor_loss(y_true, y_pred, weights)
-        loss: (B,) = tf.reduce_mean(loss, -1)
-        return loss
+        loss: (B,) = tf.reduce_sum(loss, -1)
+        # normalize loss by total weight per batch
+        fm_height, fm_width = y_pred.shape[1:3]
+        weights: (B, H * W) = tf.reshape(weights, [-1, fm_height * fm_width])
+        batch_weights: (B,) = tf.reduce_sum(weights, -1) + 1
+        return loss / batch_weights
 
 
 class CenteredBoxesIOULoss(FeatureMapPredictionTargetLoss):
