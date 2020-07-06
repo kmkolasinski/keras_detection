@@ -102,9 +102,10 @@ class FasterRCNNBuilder:
         else:
             rpn_targets_inputs = {}
             rcnn_targets_inputs = {}
-            rpn_scores, rpn_boxes, sampled_anchors = self.rpn.sample_proposal_boxes(
+            rpn_scores, rpn_boxes, sampled_anchors, sampled_indices = self.rpn.sample_proposal_boxes(
                 rpn_outputs, self.roi_sampling.num_samples
             )
+            print(sampled_indices)
             crops = self.roi_sampling.roi_align([feature_maps[0], rpn_boxes])
 
         rcnn_outputs = self.rcnn([crops])
@@ -353,6 +354,7 @@ class RPN(keras.layers.Layer):
         sampled_boxes = []
         sampled_anchors = []
         sampled_scores = []
+        sampled_indices = []
         for i in range(batch_size):
             batch_boxes = tf.reshape(boxes[i, ...], [-1, 4])
             batch_scores = tf.reshape(objectness[i, ...], [-1])
@@ -375,6 +377,7 @@ class RPN(keras.layers.Layer):
             )
             batch_anchors = pad_or_slice(batch_anchors, num_samples)
 
+            sampled_indices.append(batch_indices)
             sampled_anchors.append(batch_anchors)
             sampled_boxes.append(selected_boxes)
             sampled_scores.append(selected_scores)
@@ -382,10 +385,11 @@ class RPN(keras.layers.Layer):
         sampled_boxes = tf.stack(sampled_boxes, axis=0)
         sampled_anchors = tf.stack(sampled_anchors, axis=0)
         sampled_scores = tf.stack(sampled_scores, axis=0)
+        sampled_indices = tf.stack(sampled_indices, axis=0)
         # print("sampled_boxes (test):", sampled_boxes)
         # print("sampled_anchors (test):", sampled_anchors)
         # print("sampled_anchors (test):", sampled_scores)
-        return sampled_scores, sampled_boxes, sampled_anchors
+        return sampled_scores, sampled_boxes, sampled_anchors, sampled_indices
 
     def get_targets_input_tensors(
         self, batch_size: Optional[int] = None, prefix: str = "inputs/"
@@ -450,8 +454,14 @@ class ROISamplingLayer(keras.layers.Layer):
         sampled_boxes = fm_sampling.sample_feature_map(boxes, indices)
         indices = tf.stop_gradient(indices)
         sampled_boxes = tf.stop_gradient(sampled_boxes)
-        # print("sampled_boxes:", sampled_boxes)
-        crops = self.roi_align([feature_map, sampled_boxes])
+
+        # naive sampling
+        crops = fm_sampling.sample_feature_map(feature_map, indices)
+        num_channels = feature_map.shape[-1]
+        crops = tf.reshape(crops, [-1, 1, 1, num_channels])
+
+        # crops = self.roi_align([feature_map, sampled_boxes])
+
         return crops, sampled_boxes, indices
 
     def sample_targets_tensors(self, targets: Dict[str, tf.Tensor], indices: tf.Tensor):
