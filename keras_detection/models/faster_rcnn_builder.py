@@ -37,6 +37,8 @@ class FasterRCNNBuilder:
         rpn_objectness_task: dt.PredictionTaskDef,
         rpn_box_shape_task: dt.PredictionTaskDef,
         rcnn_tasks: List[dt.PredictionTaskDef],
+        num_samples=64,
+        crop_size=(7, 7)
     ):
         self.rcnn_tasks = rcnn_tasks
         self.backbone = backbone
@@ -51,7 +53,7 @@ class FasterRCNNBuilder:
             rpn_box_shape_task=rpn_box_shape_task,
             # name="RPN",
         )
-        self.roi_sampling = ROISamplingLayer(num_samples=64, crop_size=(7, 7))
+        self.roi_sampling = ROISamplingLayer(num_samples=num_samples, crop_size=crop_size)
 
         self.rcnn = RCNN(
             image_input_shape=self.input_shape,
@@ -333,8 +335,7 @@ class RPN(keras.layers.Layer):
         objectness, box_shape = rpn_predictions
         fm = self.rpn_fm_prediction_tasks[0]
         boxes = self.rpn_box_shape_task.target_builder.postprocess_predictions(
-            fm.fm_desc, targets['rpn/fm56x56/box_shape'][..., :4]
-            # fm.fm_desc, box_shape
+            fm.fm_desc, box_shape
         )
         boxes = self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
         return boxes, rpn_loss_map

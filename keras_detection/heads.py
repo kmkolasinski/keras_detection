@@ -4,6 +4,7 @@ from typing import Optional, Tuple, Type
 import tensorflow as tf
 import tensorflow_model_optimization as tfmo
 
+from keras_detection.backbones.resnet import ResNetBackbone
 from keras_detection.utils.dvs import *
 
 keras = tf.keras
@@ -150,6 +151,54 @@ class SingleConvPoolHead(SingleConvHead):
         h = keras.layers.Dense(self.num_outputs)(h)
         h = keras.layers.Reshape([1, 1, self.num_outputs])(h)
         return keras.Model(x, h, name=self.get_head_name(input_shape))
+
+
+class ResNetConvPoolHead(Head):
+
+    def __init__(
+        self,
+        output_name: str,
+        num_outputs: int,
+        activation: Optional[str] = "relu",
+        units_per_block = (2, ),
+    ):
+        super().__init__(output_name=output_name, num_outputs=num_outputs)
+        self.units_per_block = units_per_block
+        self.activation = activation
+
+    def build(
+        self, input_shape: Tuple[int, int, int], is_training: bool = False
+    ) -> keras.Model:
+        x = keras.layers.Input(shape=input_shape)
+
+        backbone = ResNetBackbone(
+            input_shape=input_shape,
+            units_per_block=self.units_per_block,
+            num_last_blocks=1,
+        )
+        h = backbone.forward(x)[0]
+        h = keras.layers.GlobalAveragePooling2D()(h)
+        h = keras.layers.Dense(self.num_outputs)(h)
+        h = keras.layers.Reshape([1, 1, self.num_outputs])(h)
+        return keras.Model(x, h, name=self.get_head_name(input_shape))
+
+    def forward(
+        self,
+        feature_map: (B, H, W, C),
+        is_training: bool = False,
+        quantized: bool = False,
+    ) -> tf.Tensor:
+
+        h = super().forward(feature_map, is_training, quantized)
+
+        if self.activation == "softmax":
+            # to be compatible with tflite converter, otherwise
+            # it will crash when exporting with representative_dataset
+            h = keras.layers.Softmax(name=self.output_name)(h)
+        else:
+            h = keras.layers.Activation(self.activation, name=self.output_name)(h)
+
+        return h
 
 
 class NoQuantizableSingleConvHead(SingleConvHead):
