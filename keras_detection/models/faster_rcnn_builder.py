@@ -93,6 +93,7 @@ class FasterRCNNBuilder:
             crops, crops_boxes, crops_indices = self.roi_sampling(
                 [feature_maps[0], rpn_boxes, rpn_loss_map], training=is_training
             )
+            print("crops:", crops.shape)
             rcnn_targets_inputs = self.rcnn.get_targets_input_tensors(
                 batch_size=batch_size
             )
