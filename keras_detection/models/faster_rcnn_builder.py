@@ -456,12 +456,12 @@ class ROISamplingLayer(keras.layers.Layer):
         indices = tf.stop_gradient(indices)
         sampled_boxes = tf.stop_gradient(sampled_boxes)
 
-        # naive sampling
-        crops = fm_sampling.sample_feature_map(feature_map, indices)
-        num_channels = feature_map.shape[-1]
-        crops = tf.reshape(crops, [-1, 1, 1, num_channels])
+        # # naive sampling
+        # crops = fm_sampling.sample_feature_map(feature_map, indices)
+        # num_channels = feature_map.shape[-1]
+        # crops = tf.reshape(crops, [-1, 1, 1, num_channels])
 
-        # crops = self.roi_align([feature_map, sampled_boxes])
+        crops = self.roi_align([feature_map, sampled_boxes])
 
         return crops, sampled_boxes, indices
 
