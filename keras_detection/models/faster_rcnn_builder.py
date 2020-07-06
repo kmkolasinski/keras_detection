@@ -333,7 +333,8 @@ class RPN(keras.layers.Layer):
         objectness, box_shape = rpn_predictions
         fm = self.rpn_fm_prediction_tasks[0]
         boxes = self.rpn_box_shape_task.target_builder.postprocess_predictions(
-            fm.fm_desc, box_shape
+            fm.fm_desc, targets['rpn/fm56x56/box_shape']
+            # fm.fm_desc, box_shape
         )
         boxes = self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
         return boxes, rpn_loss_map
