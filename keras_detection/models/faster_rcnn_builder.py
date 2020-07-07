@@ -157,7 +157,7 @@ class FasterRCNNBuilder:
         outputs = {}
         # outputs["feature_maps/fm0"] = feature_maps
         outputs.update(rpn_predictions_raw)
-        outputs.update(rcnn_predictions_raw)
+        # outputs.update(rcnn_predictions_raw)
 
         outputs = {
             name: keras.layers.Lambda(lambda x: x, name=name)(tensor)
