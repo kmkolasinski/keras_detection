@@ -147,6 +147,7 @@ class FasterRCNNBuilder:
             rcnn_predictions_raw["rcnn/crops"] = crops
             rcnn_predictions_raw["rcnn/crops_boxes"] = crops_boxes
             rcnn_predictions_raw["rcnn/rcnn_regression_targets"] = rcnn_regression_targets
+            rcnn_predictions_raw["rcnn/crops_indices"] = crops_indices
 
         if sampled_anchors is not None:
             rcnn_predictions_raw["rcnn/anchors"] = sampled_anchors
