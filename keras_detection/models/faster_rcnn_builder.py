@@ -20,6 +20,7 @@ from keras_detection.backbones.base import Backbone
 from keras_detection.datasets.datasets_ops import prepare_dataset
 import keras_detection.ops.tflite_metadata as tflite_metadata_ops
 from keras_detection.layers.roi_align import ROIAlignLayer
+from keras_detection.ops.np_frame_ops import epsilon
 from keras_detection.structures import ImageData
 from keras_detection.targets.base import FeatureMapDesc
 from keras_detection.targets import feature_map_sampling as fm_sampling
@@ -92,40 +93,55 @@ class FasterRCNNBuilder:
             rpn_boxes, rpn_loss_map = self.rpn.get_rpn_loss_map(
                 rpn_outputs, rpn_targets_inputs
             )
+
+            rpn_boxes_targets = rpn_targets_inputs["rpn/fm56x56/box_shape"]
+            target_boxes = self.rpn.to_tf_boxes(rpn_boxes_targets[..., :4])
+            target_boxes_weights = rpn_boxes_targets[..., 4:]
+
             crops, crops_boxes, crops_indices = self.roi_sampling(
                 [input_image, rpn_boxes, rpn_loss_map], training=is_training
-                # [feature_maps[0], rpn_boxes, rpn_loss_map], training=is_training
             )
-            print("crops:", crops.shape)
+
             rcnn_targets_inputs = self.rcnn.get_targets_input_tensors(
                 batch_size=batch_size
             )
             rcnn_targets = self.roi_sampling.sample_targets_tensors(
                 rcnn_targets_inputs, indices=crops_indices
             )
+            rcnn_box_targets = self.roi_sampling.sample_targets_tensors(
+                {"boxes": target_boxes, "weights": target_boxes_weights},
+                indices=crops_indices
+            )
+            print("target tensors:", rcnn_box_targets)
+
         else:
             rpn_targets_inputs = {}
             rcnn_targets_inputs = {}
-            rpn_scores, rpn_boxes, sampled_anchors, sampled_indices = self.rpn.sample_proposal_boxes(
+            rpn_scores, crops_boxes, sampled_anchors, sampled_indices = self.rpn.sample_proposal_boxes(
                 rpn_outputs, self.roi_sampling.num_samples
             )
             print(sampled_indices)
-            crops = self.roi_sampling.roi_align([feature_maps[0], rpn_boxes])
+            crops = self.roi_sampling.roi_align([feature_maps[0], crops_boxes])
 
         rcnn_outputs = self.rcnn([crops])
         rcnn_predictions_raw = self.rcnn.predictions_to_dict(
             rcnn_outputs, postprocess=False
         )
 
+        rcnn_boxes = rcnn_predictions_raw["rcnn/fm56x56/box_shape"]
+        rcnn_regression_boxes = self.decode_rcnn_box_predictions(crops_boxes, rcnn_boxes)
+        rcnn_predictions_raw["rcnn/regression_boxes"] = rcnn_regression_boxes
+
         if is_training:
             rcnn_predictions_raw["rcnn/crops"] = crops
             rcnn_predictions_raw["rcnn/crops_boxes"] = crops_boxes
             rcnn_predictions_raw["rcnn/crops_indices"] = crops_indices
 
+
         if sampled_anchors is not None:
             rcnn_predictions_raw["rcnn/anchors"] = sampled_anchors
             rcnn_predictions_raw["rcnn/scores"] = rpn_scores
-            rcnn_predictions_raw["rcnn/boxes"] = rpn_boxes
+            rcnn_predictions_raw["rcnn/boxes"] = crops_boxes
 
         outputs = {}
         # outputs["feature_maps/fm0"] = feature_maps
@@ -149,7 +165,79 @@ class FasterRCNNBuilder:
         if is_training:
             self.add_rcnn_loss(rcnn_model, rcnn_targets, rcnn_predictions_raw)
 
+            self.add_box_offset_loss(
+                rcnn_model,
+                crops_boxes,
+                rcnn_box_targets["boxes"],
+                rcnn_box_targets["weights"],
+                rcnn_predictions_raw["rcnn/fm56x56/box_shape"]
+            )
+
         return rcnn_model
+
+    def decode_rcnn_box_predictions(self, rpn_boxes: tf.Tensor, rcnn_boxes: tf.Tensor):
+
+        rpn_boxes = tf.reshape(rpn_boxes, [-1, 4])
+        rcnn_boxes = tf.reshape(rcnn_boxes, [-1, 4])
+        rpn_ymin, rpn_xmin, rpn_ymax, rpn_xmax = tf.split(rpn_boxes, 4, axis=-1)
+        ty, tx, th, tw = tf.split(rcnn_boxes, 4, axis=-1)
+        rpn_height, rpn_width = rpn_ymax - rpn_ymin, rpn_xmax - rpn_xmin
+        rpn_cy, rpn_cx = (rpn_ymax + rpn_ymin) / 2, (rpn_xmax + rpn_xmin) / 2
+
+        tx = rpn_width * tx + rpn_cx
+        ty = rpn_height * ty + rpn_cy
+        tw = rpn_width * tf.exp(tw)
+        th = rpn_height * tf.exp(th)
+
+        ymin, ymax = ty - th / 2, ty + th / 2
+        xmin, xmax = tx - tw / 2, tx + tw / 2
+        return tf.stack([ymin, xmin, ymax, xmax])
+
+    def add_box_offset_loss(
+            self,
+            model: keras.Model,
+            rpn_boxes: tf.Tensor,
+            target_boxes: tf.Tensor,
+            target_weights: tf.Tensor,
+            predictions: tf.Tensor
+    ):
+        rpn_boxes = tf.reshape(rpn_boxes, [-1, 4])
+        target_boxes = tf.reshape(target_boxes, [-1, 4])
+        target_weights = tf.reshape(target_weights, [-1, 1])
+
+        rpn_ymin, rpn_xmin, rpn_ymax, rpn_xmax = tf.split(rpn_boxes, 4, axis=-1)
+        t_ymin, t_xmin, t_ymax, t_xmax = tf.split(target_boxes, 4, axis=-1)
+
+        rpn_height, rpn_width = rpn_ymax - rpn_ymin, rpn_xmax - rpn_xmin
+        rpn_cy, rpn_cx = (rpn_ymax + rpn_ymin)/2, (rpn_xmax + rpn_xmin)/2
+        t_height, t_width = t_ymax - t_ymin, t_xmax - t_xmin
+        t_cy, t_cx = (t_ymax + t_ymin) / 2, (t_xmax + t_xmin) / 2
+
+        rpn_width = tf.maximum(tf.abs(rpn_width), 0.001)
+        rpn_height = tf.maximum(tf.abs(rpn_height), 0.001)
+
+        t_width = tf.maximum(tf.abs(t_width), epsilon)
+        t_height = tf.maximum(tf.abs(t_height), epsilon)
+
+        tx = (t_cx - rpn_cx) / rpn_width
+        ty = (t_cy - rpn_cy) / rpn_height
+        tw = tf.math.log(t_width / rpn_width)
+        th = tf.math.log(t_height / rpn_height)
+
+        targets = tf.concat([ty, tx, th, tw, target_weights], axis=-1)
+        targets = tf.stop_gradient(targets)
+
+        targets = tf.reshape(targets, [-1, 1, 1, 5])
+        predictions = tf.reshape(predictions, [-1, 1, 1, 4])
+
+        key = "rcnn/fm56x56/box_shape"
+        loss_weight = self.rcnn.get_losses_weights()["rcnn/fm56x56/box_shape"]
+        loss_class = self.rcnn.get_losses()["rcnn/fm56x56/box_shape"]
+
+        loss = loss_class.call(y_true=targets, y_pred=predictions)
+        loss = loss * loss_weight
+        model.add_loss(tf.reduce_mean(loss))
+        model.add_metric(tf.reduce_mean(loss), name=key, aggregation="mean")
 
     def add_rcnn_loss(
         self,
@@ -161,6 +249,9 @@ class FasterRCNNBuilder:
         weights = self.rcnn.get_losses_weights()
 
         for key, loss_class in self.rcnn.get_losses().items():
+            if "rcnn/fm56x56/box_shape" == key:
+                print(f"Skipping auto loss for key: {key}")
+                continue
             print("Adding loss: ", key)
             y_true = rcnn_targets[key]
             y_pred = rcnn_predictions[key]
@@ -314,6 +405,13 @@ class RPN(keras.layers.Layer):
             )
             self.rpn_fm_prediction_tasks.append(fm_tasks)
 
+    def to_tf_boxes(self, box_shape):
+        fm = self.rpn_fm_prediction_tasks[0]
+        boxes = self.rpn_box_shape_task.target_builder.postprocess_predictions(
+            fm.fm_desc, box_shape
+        )
+        return self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
+
     def get_rpn_loss_map(
         self, rpn_predictions: List[tf.Tensor], targets: Dict[str, tf.Tensor]
     ):
@@ -334,11 +432,9 @@ class RPN(keras.layers.Layer):
         rpn_loss_map = tf.add_n(losses)
 
         objectness, box_shape = rpn_predictions
-        fm = self.rpn_fm_prediction_tasks[0]
-        boxes = self.rpn_box_shape_task.target_builder.postprocess_predictions(
-            fm.fm_desc, box_shape
-        )
-        boxes = self.rpn_box_shape_task.target_builder.to_tf_boxes(boxes)
+
+        boxes = self.to_tf_boxes(box_shape)
+
         return boxes, rpn_loss_map
 
     def sample_proposal_boxes(self, rpn_predictions: List[tf.Tensor], num_samples: int):
