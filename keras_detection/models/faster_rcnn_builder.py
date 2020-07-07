@@ -191,7 +191,7 @@ class FasterRCNNBuilder:
 
         ymin, ymax = ty - th / 2, ty + th / 2
         xmin, xmax = tx - tw / 2, tx + tw / 2
-        return tf.stack([ymin, xmin, ymax, xmax])
+        return tf.stack([ymin, xmin, ymax, xmax], axis=-1)
 
     def add_box_offset_loss(
             self,
