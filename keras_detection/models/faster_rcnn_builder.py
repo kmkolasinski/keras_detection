@@ -261,7 +261,7 @@ class FasterRCNNBuilder:
         loss = loss * loss_weight
         model.add_loss(tf.reduce_mean(loss))
         model.add_metric(tf.reduce_mean(loss), name=key, aggregation="mean")
-        model.add_metric(tf.reduce_sum(targets[..., :4]), name=key + "-targets-sum", aggregation="mean")
+        model.add_metric(tf.reduce_sum(predictions[..., :4]), name=key + "-predictions-sum", aggregation="mean")
 
         return targets
 
