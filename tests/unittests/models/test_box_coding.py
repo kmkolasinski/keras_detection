@@ -59,3 +59,22 @@ class SizeEstimatorBackboneTest(tf.test.TestCase):
         predictions = tf.reshape(predictions, bshape)
 
         self.assertAllClose(boxes, predictions)
+
+    def test_real_case(self):
+        target_boxes = tf.constant([[0.85663325, 0.10511288, 0.99999994, 0.25377652]])
+
+        bshape = target_boxes.shape.as_list()
+
+        predicted_boxes = tf.constant([[0.86021453, 0.11470187, 0.991154, 0.24762806]])
+
+        targets = FasterRCNNBuilder.encode_box_targets(
+            rpn_boxes=predicted_boxes, target_boxes=target_boxes, target_weights=tf.ones_like(target_boxes[..., 0])
+        )
+
+        predictions = FasterRCNNBuilder.decode_rcnn_box_predictions(
+            rpn_boxes=predicted_boxes, rcnn_boxes=targets[..., :4]
+        )
+
+        predictions = tf.reshape(predictions, bshape)
+
+        self.assertAllClose(target_boxes, predictions)
