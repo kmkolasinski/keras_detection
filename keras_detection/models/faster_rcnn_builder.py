@@ -232,7 +232,7 @@ class FasterRCNNBuilder:
         tw = tf.math.log(t_width / rpn_width)
         th = tf.math.log(t_height / rpn_height)
         mask = tf.cast(tf.greater(target_weights, 0), dtype=tf.float32)
-        targets = tf.concat([ty, tx, th, tw, target_weights], axis=-1)
+        targets = tf.concat([ty*0, tx*0, th*0, tw*0, target_weights], axis=-1)
         targets = tf.stop_gradient(mask * targets)
         return targets
 
