@@ -39,7 +39,7 @@ class FasterRCNNBuilder:
         rpn_box_shape_task: dt.PredictionTaskDef,
         rcnn_tasks: List[dt.PredictionTaskDef],
         num_samples=64,
-        crop_size=(7, 7)
+        crop_size=(7, 7),
     ):
         self.rcnn_tasks = rcnn_tasks
         self.backbone = backbone
@@ -54,7 +54,9 @@ class FasterRCNNBuilder:
             rpn_box_shape_task=rpn_box_shape_task,
             # name="RPN",
         )
-        self.roi_sampling = ROISamplingLayer(num_samples=num_samples, crop_size=crop_size)
+        self.roi_sampling = ROISamplingLayer(
+            num_samples=num_samples, crop_size=crop_size
+        )
 
         self.rcnn = RCNN(
             image_input_shape=self.input_shape,
@@ -110,7 +112,7 @@ class FasterRCNNBuilder:
             )
             rcnn_box_targets = self.roi_sampling.sample_targets_tensors(
                 {"boxes": target_boxes, "weights": target_boxes_weights},
-                indices=crops_indices
+                indices=crops_indices,
             )
             print("target tensors:", rcnn_box_targets)
 
@@ -129,14 +131,22 @@ class FasterRCNNBuilder:
         )
 
         rcnn_boxes = rcnn_predictions_raw["rcnn/fm56x56/box_shape"]
-        rcnn_regression_boxes = self.decode_rcnn_box_predictions(crops_boxes, rcnn_boxes)
+        rcnn_regression_boxes = self.decode_rcnn_box_predictions(
+            crops_boxes, rcnn_boxes
+        )
+
+        rcnn_regression_targets = self.encode_box_targets(
+            crops_boxes,
+            rcnn_box_targets["boxes"],
+            rcnn_box_targets["weights"],
+        )
+
         rcnn_predictions_raw["rcnn/regression_boxes"] = rcnn_regression_boxes
 
         if is_training:
             rcnn_predictions_raw["rcnn/crops"] = crops
             rcnn_predictions_raw["rcnn/crops_boxes"] = crops_boxes
-            rcnn_predictions_raw["rcnn/crops_indices"] = crops_indices
-
+            rcnn_predictions_raw["rcnn/rcnn_regression_targets"] = rcnn_regression_targets
 
         if sampled_anchors is not None:
             rcnn_predictions_raw["rcnn/anchors"] = sampled_anchors
@@ -170,12 +180,13 @@ class FasterRCNNBuilder:
                 crops_boxes,
                 rcnn_box_targets["boxes"],
                 rcnn_box_targets["weights"],
-                rcnn_predictions_raw["rcnn/fm56x56/box_shape"]
+                rcnn_predictions_raw["rcnn/fm56x56/box_shape"],
             )
 
         return rcnn_model
 
-    def decode_rcnn_box_predictions(self, rpn_boxes: tf.Tensor, rcnn_boxes: tf.Tensor):
+    @staticmethod
+    def decode_rcnn_box_predictions(rpn_boxes: tf.Tensor, rcnn_boxes: tf.Tensor):
 
         rpn_boxes = tf.reshape(rpn_boxes, [-1, 4])
         rcnn_boxes = tf.reshape(rcnn_boxes, [-1, 4])
@@ -193,13 +204,9 @@ class FasterRCNNBuilder:
         xmin, xmax = tx - tw / 2, tx + tw / 2
         return tf.stack([ymin, xmin, ymax, xmax], axis=-1)
 
-    def add_box_offset_loss(
-            self,
-            model: keras.Model,
-            rpn_boxes: tf.Tensor,
-            target_boxes: tf.Tensor,
-            target_weights: tf.Tensor,
-            predictions: tf.Tensor
+    @staticmethod
+    def encode_box_targets(
+        rpn_boxes: tf.Tensor, target_boxes: tf.Tensor, target_weights: tf.Tensor
     ):
         rpn_boxes = tf.reshape(rpn_boxes, [-1, 4])
         target_boxes = tf.reshape(target_boxes, [-1, 4])
@@ -209,7 +216,7 @@ class FasterRCNNBuilder:
         t_ymin, t_xmin, t_ymax, t_xmax = tf.split(target_boxes, 4, axis=-1)
 
         rpn_height, rpn_width = rpn_ymax - rpn_ymin, rpn_xmax - rpn_xmin
-        rpn_cy, rpn_cx = (rpn_ymax + rpn_ymin)/2, (rpn_xmax + rpn_xmin)/2
+        rpn_cy, rpn_cx = (rpn_ymax + rpn_ymin) / 2, (rpn_xmax + rpn_xmin) / 2
         t_height, t_width = t_ymax - t_ymin, t_xmax - t_xmin
         t_cy, t_cx = (t_ymax + t_ymin) / 2, (t_xmax + t_xmin) / 2
 
@@ -226,6 +233,21 @@ class FasterRCNNBuilder:
 
         targets = tf.concat([ty, tx, th, tw, target_weights], axis=-1)
         targets = tf.stop_gradient(targets)
+        return targets
+
+    def add_box_offset_loss(
+        self,
+        model: keras.Model,
+        rpn_boxes: tf.Tensor,
+        target_boxes: tf.Tensor,
+        target_weights: tf.Tensor,
+        predictions: tf.Tensor,
+    ):
+        targets = self.encode_box_targets(
+            rpn_boxes=rpn_boxes,
+            target_boxes=target_boxes,
+            target_weights=target_weights
+        )
 
         targets = tf.reshape(targets, [-1, 1, 1, 5])
         predictions = tf.reshape(predictions, [-1, 1, 1, 4])
@@ -238,6 +260,8 @@ class FasterRCNNBuilder:
         loss = loss * loss_weight
         model.add_loss(tf.reduce_mean(loss))
         model.add_metric(tf.reduce_mean(loss), name=key, aggregation="mean")
+
+        return targets
 
     def add_rcnn_loss(
         self,
