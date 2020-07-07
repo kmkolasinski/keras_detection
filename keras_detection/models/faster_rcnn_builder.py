@@ -157,7 +157,7 @@ class FasterRCNNBuilder:
         outputs = {}
         # outputs["feature_maps/fm0"] = feature_maps
         outputs.update(rpn_predictions_raw)
-        # outputs.update(rcnn_predictions_raw)
+        outputs.update(rcnn_predictions_raw)
 
         outputs = {
             name: keras.layers.Lambda(lambda x: x, name=name)(tensor)
@@ -261,6 +261,7 @@ class FasterRCNNBuilder:
         loss = loss * loss_weight
         model.add_loss(tf.reduce_mean(loss))
         model.add_metric(tf.reduce_mean(loss), name=key, aggregation="mean")
+        model.add_metric(tf.reduce_sum(targets[..., :4]), name=key + "-targets-sum", aggregation="mean")
 
         return targets
 
