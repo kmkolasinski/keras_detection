@@ -231,7 +231,7 @@ class FasterRCNNBuilder:
         ty = (t_cy - rpn_cy) / rpn_height
         tw = tf.math.log(t_width / rpn_width)
         th = tf.math.log(t_height / rpn_height)
-
+        target_weights = 0 * target_weights
         targets = tf.concat([ty, tx, th, tw, target_weights], axis=-1)
         targets = tf.stop_gradient(targets)
         return targets
