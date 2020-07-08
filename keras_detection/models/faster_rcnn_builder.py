@@ -82,7 +82,7 @@ class FasterRCNNBuilder:
             len(feature_maps) == 1
         ), "Case when there are more FMs than 1 is not supported yet"
 
-        rpn_outputs = self.rpn(feature_maps)
+        rpn_outputs = self.rpn.call(feature_maps)
         rpn_predictions_raw = self.rpn.predictions_to_dict(
             rpn_outputs, postprocess=False
         )
@@ -126,7 +126,8 @@ class FasterRCNNBuilder:
             crops = self.roi_sampling.roi_align([feature_maps[0], crops_boxes])
 
         # crops = tf.stop_gradient(crops)
-        rcnn_outputs = self.rcnn([crops * 0])
+        rcnn_outputs = self.rcnn.call([crops])
+
         print("rcnn_outputs:", rcnn_outputs)
         rcnn_predictions_raw = self.rcnn.predictions_to_dict(
             rcnn_outputs, postprocess=False
@@ -341,7 +342,7 @@ class FasterRCNNBuilder:
         return prepare_dataset_fn
 
 
-class RPN(keras.layers.Layer):
+class RPN:
     def __init__(
         self,
         image_input_shape: Tuple[int, int, int],
@@ -606,7 +607,7 @@ class ROISamplingLayer(keras.layers.Layer):
         return crops_targets
 
 
-class RCNN(keras.layers.Layer):
+class RCNN:
     def __init__(
         self,
         image_input_shape: Tuple[int, int, int],

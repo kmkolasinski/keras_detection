@@ -5,6 +5,7 @@ import tensorflow as tf
 import tensorflow_model_optimization as tfmo
 
 from keras_detection.backbones.resnet import ResNetBackbone
+from keras_detection.models.utils import get_l2_loss_fn
 from keras_detection.utils.dvs import *
 
 keras = tf.keras
@@ -50,6 +51,10 @@ class Head(ABC):
 
         if not quantized:
             outputs = self._head_model(feature_map)
+            # l2 = get_l2_loss_fn(self._head_model, l2_reg=0.0)()
+            # print(f"building l2 loss for {self.output_name}", l2)
+            # self._head_model.add_metric(l2, name=f"l2-{self.output_name}", aggregation="mean")
+
         else:
             LOGGER.info(f"Running quantization for head: '{self.output_name}'")
             model = tfmo.quantization.keras.quantize_model(self._head_model)
