@@ -126,9 +126,11 @@ class FasterRCNNBuilder:
             crops = self.roi_sampling.roi_align([feature_maps[0], crops_boxes])
 
         rcnn_outputs = self.rcnn([crops])
+        print("rcnn_outputs:", rcnn_outputs)
         rcnn_predictions_raw = self.rcnn.predictions_to_dict(
             rcnn_outputs, postprocess=False
         )
+        print("rcnn_predictions_raw:", rcnn_predictions_raw)
 
         rcnn_boxes = rcnn_predictions_raw["rcnn/fm56x56/box_shape"]
         rcnn_regression_boxes = self.decode_rcnn_box_predictions(
@@ -257,8 +259,9 @@ class FasterRCNNBuilder:
         loss_weight = self.rcnn.get_losses_weights()["rcnn/fm56x56/box_shape"]
         loss_class = self.rcnn.get_losses()["rcnn/fm56x56/box_shape"]
 
-        loss = loss_class.call(y_true=targets, y_pred=predictions)
-        loss = loss * loss_weight
+        # loss = loss_class.call(y_true=targets, y_pred=predictions)
+        # loss = loss * loss_weight
+        loss = tf.reduce_mean(tf.square(predictions))
         model.add_loss(tf.reduce_mean(loss))
         model.add_metric(tf.reduce_mean(loss), name=key, aggregation="mean")
         model.add_metric(tf.reduce_sum(predictions[..., :4]), name=key + "-predictions-sum", aggregation="mean")
