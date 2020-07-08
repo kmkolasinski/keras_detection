@@ -177,7 +177,7 @@ class FasterRCNNBuilder:
         )
 
         if is_training:
-            self.add_rcnn_loss(rcnn_model, rcnn_targets, rcnn_predictions_raw)
+            # self.add_rcnn_loss(rcnn_model, rcnn_targets, rcnn_predictions_raw)
 
             self.add_box_offset_loss(
                 rcnn_model,
