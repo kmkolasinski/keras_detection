@@ -125,6 +125,7 @@ class FasterRCNNBuilder:
             print(sampled_indices)
             crops = self.roi_sampling.roi_align([feature_maps[0], crops_boxes])
 
+        crops = tf.stop_gradient(crops)
         rcnn_outputs = self.rcnn([crops])
         print("rcnn_outputs:", rcnn_outputs)
         rcnn_predictions_raw = self.rcnn.predictions_to_dict(
