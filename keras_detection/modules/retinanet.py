@@ -18,7 +18,7 @@ class Retina(keras.Model):
         image_dim = 224
         self.backbone = ResNet(
             input_shape=(image_dim, image_dim, 3),
-            units_per_block=(1, 1, 1),
+            units_per_block=(2, 2),
             num_last_blocks=1,
         )
 
@@ -106,7 +106,6 @@ class Retina(keras.Model):
 
     def train_step(self, data):
         batch_data = ImageData.from_dict(data)
-
 
         with tf.GradientTape() as tape:
             predictions = self(batch_data.features.image / 255.0, training=True)
