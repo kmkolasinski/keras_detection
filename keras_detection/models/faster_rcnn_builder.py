@@ -101,7 +101,7 @@ class FasterRCNNBuilder:
             target_boxes_weights = rpn_boxes_targets[..., 4:]
 
             crops, crops_boxes, crops_indices = self.roi_sampling(
-                [input_image, rpn_boxes, rpn_loss_map], training=is_training
+                [feature_maps[0], rpn_boxes, rpn_loss_map], training=is_training
             )
 
             rcnn_targets_inputs = self.rcnn.get_targets_input_tensors(
@@ -125,7 +125,7 @@ class FasterRCNNBuilder:
             print(sampled_indices)
             crops = self.roi_sampling.roi_align([feature_maps[0], crops_boxes])
 
-        # crops = tf.stop_gradient(crops)
+        crops = tf.stop_gradient(crops)
         rcnn_outputs = self.rcnn.call([crops])
 
         print("rcnn_outputs:", rcnn_outputs)

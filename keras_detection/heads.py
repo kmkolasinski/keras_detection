@@ -52,7 +52,7 @@ class Head(ABC):
         if not quantized:
             outputs = self._head_model(feature_map)
             # l2 = get_l2_loss_fn(self._head_model, l2_reg=0.0)()
-            # print(f"building l2 loss for {self.output_name}", l2)
+            print(f"building l2 loss for {self.output_name}", [w.name for w in self._head_model.weights])
             # self._head_model.add_metric(l2, name=f"l2-{self.output_name}", aggregation="mean")
 
         else:
@@ -153,7 +153,7 @@ class SingleConvPoolHead(SingleConvHead):
 
         # h = keras.layers.Dense(self._num_filters)(h)
         # h = keras.layers.ReLU()(h)
-        h = keras.layers.Dense(self.num_outputs)(h)
+        h = keras.layers.Dense(self.num_outputs, use_bias=False)(h)
         # h = keras.layers.Reshape([1, 1, self.num_outputs])(h)
         return keras.Model(x, h, name=self.get_head_name(input_shape))
 

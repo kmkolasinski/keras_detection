@@ -343,5 +343,5 @@ def CustomResNet(
     else:
         inputs = img_input
 
-    model = models.Model(inputs, outputs)
+    model = models.Model(inputs, outputs, name=model_params.model_name)
     return model
