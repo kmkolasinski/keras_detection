@@ -73,11 +73,11 @@ class SingleConvHead(Head):
         h = self.conv1bn(h)
         h = self.conv1act(h)
         h = self.conv2(h)
+
         if self.activation == "softmax":
             # to be compatible with tflite converter, otherwise
             # it will crash when exporting with representative_dataset
             h = keras.layers.Softmax()(h)
         else:
             h = keras.layers.Activation(self.activation)(h)
-
-        return [h]
+        return h
