@@ -44,6 +44,7 @@ class Retina(keras.Model):
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.box_loss_tracker = keras.metrics.Mean(name="box_loss")
         self.obj_loss_tracker = keras.metrics.Mean(name="obj_loss")
+        self.l2_loss_tracker = keras.metrics.Mean(name="l2")
 
     def call(self, inputs, training: bool = False, mask=None):
         fm_id = 0
@@ -84,8 +85,8 @@ class Retina(keras.Model):
             obj_loss = self.objectness_head.compute_losses(
                 obj_loss_targets, predictions["objectness"]
             )
-            l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)
-            loss = tf.add_n(box_loss + obj_loss) + l2_reg_fn()
+            l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)()
+            loss = tf.add_n(box_loss + obj_loss) + l2_reg_fn
 
         # Compute gradients
         trainable_vars = self.trainable_variables
@@ -98,8 +99,10 @@ class Retina(keras.Model):
         self.loss_tracker.update_state(loss)
         self.box_loss_tracker.update_state(box_loss)
         self.obj_loss_tracker.update_state(obj_loss)
+        self.l2_loss_tracker.update_state(l2_reg_fn)
         return {
             "loss": self.loss_tracker.result(),
             "box_loss": self.box_loss_tracker.result(),
             "obj_loss": self.obj_loss_tracker.result(),
+            "l2_loss": self.l2_loss_tracker.result(),
         }
