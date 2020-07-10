@@ -14,40 +14,36 @@ LOGGER = tf.get_logger()
 class Head(Module):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.target_assigners: List[FeatureMapPredictionTarget] = []
-        self.head_losses: List[FeatureMapPredictionTargetLoss] = []
-        self.loss_weights: List[float] = []
-        self.head_metrics: List[List[FeatureMapPredictionTargetMetric]] = [[]]
+        self.target_assigners: FeatureMapPredictionTarget = None
+        self.head_losses: FeatureMapPredictionTargetLoss = None
+        self.loss_weights: float = 1.0
+        self.head_metrics: List[FeatureMapPredictionTargetMetric] = []
         self.fm_desc: Optional[FeatureMapDesc] = None
 
-    def set_targets(self, targets: List[FeatureMapPredictionTarget]):
+    def set_targets(self, targets: FeatureMapPredictionTarget):
         self.target_assigners = targets
 
     def set_losses(
-        self, losses: List[FeatureMapPredictionTargetLoss], weights: List[float]
+        self, losses: FeatureMapPredictionTargetLoss, weights: float
     ):
         self.head_losses = losses
         self.loss_weights = weights
 
-    def set_metrics(self, metrics: List[FeatureMapPredictionTargetMetric]):
+    def set_metrics(self, metrics: FeatureMapPredictionTargetMetric):
         self.head_metrics = metrics
 
     def set_feature_map_description(self, fm_desc: FeatureMapDesc):
         self.fm_desc = fm_desc
 
     def compute_targets(self, batch: ImageData):
-        return [
-            ta.get_targets_tensors(self.fm_desc, batch.labels)
-            for ta in self.target_assigners
-        ]
+        return self.target_assigners.get_targets_tensors(self.fm_desc, batch.labels)
 
     def compute_losses(
-        self, targets: List[tf.Tensor], predictions: List[tf.Tensor]
+        self, targets: tf.Tensor, predictions: tf.Tensor
     ) -> List[tf.Tensor]:
-        return [
-            tf.constant(self.loss_weights[k]) * loss.call(targets[k], predictions[k])
-            for k, loss in enumerate(self.head_losses)
-        ]
+        w = tf.constant(self.loss_weights)
+        loss = self.head_losses.call(targets, predictions)
+        return w * loss
 
 
 class SingleConvHead(Head):

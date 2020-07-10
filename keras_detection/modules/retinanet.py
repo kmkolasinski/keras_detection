@@ -8,6 +8,7 @@ from keras_detection.structures import FeatureMapDesc, ImageData
 import keras_detection.losses as losses
 from keras_detection.modules.backbones.resnet import ResNet
 import keras_detection.models.utils as kd_utils
+
 keras = tf.keras
 
 
@@ -25,21 +26,19 @@ class Retina(keras.Model):
         self.objectness_head = SingleConvHead("objectness", 1, activation="sigmoid")
 
         box_shape_ta = BoxShapeTarget()
-        self.box_head.set_targets([box_shape_ta])
-        self.box_head.set_losses([losses.L1Loss(box_shape_ta)], [1.0])
+        self.box_head.set_targets(box_shape_ta)
+        self.box_head.set_losses(losses.L1Loss(box_shape_ta), 1.0)
 
         box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget()
-        self.objectness_head.set_targets([box_objectness_ta])
+        self.objectness_head.set_targets(box_objectness_ta)
         self.objectness_head.set_losses(
-            [
-                losses.BCELoss(
-                    box_objectness_ta,
-                    label_smoothing=0.01,
-                    smooth_only_positives=True,
-                    from_logits=False,
-                )
-            ],
-            [1.0],
+            losses.BCELoss(
+                box_objectness_ta,
+                label_smoothing=0.01,
+                smooth_only_positives=True,
+                from_logits=False,
+            ),
+            1.0,
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.box_loss_tracker = keras.metrics.Mean(name="box_loss")
@@ -85,8 +84,8 @@ class Retina(keras.Model):
             obj_loss = self.objectness_head.compute_losses(
                 obj_loss_targets, predictions["objectness"]
             )
-            l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)()
-            loss = tf.add_n(box_loss + obj_loss) + l2_reg_fn
+            l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-4, model=self)()
+            loss = box_loss + obj_loss + l2_reg_fn
 
         # Compute gradients
         trainable_vars = self.trainable_variables
