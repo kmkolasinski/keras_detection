@@ -3,7 +3,7 @@ from tensorflow.python.keras import Input
 
 from keras_detection.modules.heads.heads import SingleConvHead
 from keras_detection.targets.box_shape import BoxShapeTarget
-from keras_detection.targets.box_objectness import BoxCenterIgnoreMarginObjectnessTarget
+from keras_detection.targets.box_objectness import BoxCenterIgnoreMarginObjectnessTarget, BoxCenterObjectnessTarget
 from keras_detection.structures import FeatureMapDesc, ImageData
 import keras_detection.losses as losses
 from keras_detection.modules.backbones.resnet import ResNet
@@ -19,7 +19,7 @@ class Retina(keras.Model):
         image_dim = 224
         self.backbone = ResNet(
             input_shape=(image_dim, image_dim, 3),
-            units_per_block=(2, 2),
+            units_per_block=(3, 3),
             num_last_blocks=1,
         )
 
@@ -30,7 +30,7 @@ class Retina(keras.Model):
         self.box_head.set_targets(box_shape_ta)
         self.box_head.set_losses(losses.L1Loss(box_shape_ta), 10.0)
 
-        box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget(pos_weights=5.0)
+        box_objectness_ta = BoxCenterObjectnessTarget(pos_weights=5.0)
         self.objectness_head.set_targets(box_objectness_ta)
         self.objectness_head.set_losses(
             losses.BCELoss(
