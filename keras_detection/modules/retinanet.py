@@ -47,6 +47,9 @@ class Retina(keras.Model):
 
     def call(self, inputs, training: bool = False, mask=None):
         fm_id = 0
+        if isinstance(inputs, dict):
+            inputs = inputs['features']['image']
+
         image = inputs
         feature_maps = self.backbone(image)
 
@@ -69,8 +72,41 @@ class Retina(keras.Model):
             line_length=line_length, positions=positions, print_fn=print_fn
         )
 
+    def test_step(self, data):
+        batch_data = ImageData.from_dict(data)
+
+        predictions = self(batch_data.features.image / 255.0, training=True)
+
+        box_loss_targets = self.box_head.compute_targets(batch_data)
+
+        box_loss = self.box_head.compute_losses(
+            box_loss_targets, predictions["boxes"]
+        )
+
+        obj_loss_targets = self.objectness_head.compute_targets(batch_data)
+        obj_loss = self.objectness_head.compute_losses(
+            obj_loss_targets, predictions["objectness"]
+        )
+        l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-4, model=self)()
+        box_loss = tf.reduce_mean(box_loss)
+        obj_loss = tf.reduce_mean(obj_loss)
+        loss = box_loss + obj_loss + l2_reg_fn
+
+        # Compute our own metrics
+        self.loss_tracker.update_state(loss)
+        self.box_loss_tracker.update_state(box_loss)
+        self.obj_loss_tracker.update_state(obj_loss)
+        self.l2_loss_tracker.update_state(l2_reg_fn)
+        return {
+            "loss": self.loss_tracker.result(),
+            "box_loss": self.box_loss_tracker.result(),
+            "obj_loss": self.obj_loss_tracker.result(),
+            "l2_loss": self.l2_loss_tracker.result(),
+        }
+
     def train_step(self, data):
         batch_data = ImageData.from_dict(data)
+
 
         with tf.GradientTape() as tape:
             predictions = self(batch_data.features.image / 255.0, training=True)
