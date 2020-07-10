@@ -76,7 +76,7 @@ class Retina(keras.Model):
             predictions = self(batch_data.features.image / 255.0, training=True)
 
             box_loss_targets = self.box_head.compute_targets(batch_data)
-            print(predictions["boxes"])
+
             box_loss = self.box_head.compute_losses(
                 box_loss_targets, predictions["boxes"]
             )
