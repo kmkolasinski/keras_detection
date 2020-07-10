@@ -86,6 +86,8 @@ class Retina(keras.Model):
                 obj_loss_targets, predictions["objectness"]
             )
             l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-4, model=self)()
+            box_loss = tf.reduce_mean(box_loss)
+            obj_loss = tf.reduce_mean(obj_loss)
             loss = box_loss + obj_loss + l2_reg_fn
 
         # Compute gradients
