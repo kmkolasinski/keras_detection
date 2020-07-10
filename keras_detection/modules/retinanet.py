@@ -15,6 +15,7 @@ keras = tf.keras
 class Retina(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         image_dim = 224
         self.backbone = ResNet(
             input_shape=(image_dim, image_dim, 3),
@@ -29,12 +30,12 @@ class Retina(keras.Model):
         self.box_head.set_targets(box_shape_ta)
         self.box_head.set_losses(losses.L1Loss(box_shape_ta), 10.0)
 
-        box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget()
+        box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget(pos_weights=5.0)
         self.objectness_head.set_targets(box_objectness_ta)
         self.objectness_head.set_losses(
             losses.BCELoss(
                 box_objectness_ta,
-                label_smoothing=0.01,
+                label_smoothing=0.02,
                 smooth_only_positives=True,
                 from_logits=False,
             ),
