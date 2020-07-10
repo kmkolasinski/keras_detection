@@ -27,7 +27,7 @@ class Retina(keras.Model):
 
         box_shape_ta = BoxShapeTarget()
         self.box_head.set_targets(box_shape_ta)
-        self.box_head.set_losses(losses.L1Loss(box_shape_ta), 1.0)
+        self.box_head.set_losses(losses.L1Loss(box_shape_ta), 10.0)
 
         box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget()
         self.objectness_head.set_targets(box_objectness_ta)
