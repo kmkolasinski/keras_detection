@@ -7,7 +7,7 @@ from keras_detection.targets.box_objectness import BoxCenterIgnoreMarginObjectne
 from keras_detection.structures import FeatureMapDesc, ImageData
 import keras_detection.losses as losses
 from keras_detection.modules.backbones.resnet import ResNet
-
+import keras_detection.models.utils as kd_utils
 keras = tf.keras
 
 
@@ -84,7 +84,8 @@ class Retina(keras.Model):
             obj_loss = self.objectness_head.compute_losses(
                 obj_loss_targets, predictions["objectness"]
             )
-            loss = tf.add_n(box_loss + obj_loss)
+            l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)
+            loss = tf.add_n(box_loss + obj_loss) + l2_reg_fn()
 
         # Compute gradients
         trainable_vars = self.trainable_variables
