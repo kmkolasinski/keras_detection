@@ -1,4 +1,6 @@
-from typing import Tuple, Any
+from typing import Tuple, Any, List
+
+from keras_detection import FeatureMapDesc
 from keras_detection.backbones.resnet import ResNetBackbone
 from keras_detection.modules.core import Module
 import tensorflow as tf
@@ -37,7 +39,7 @@ class ResNet(Module):
         attention: Any = None,
         name: str = "ResNetBackbone",
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, *args, **kwargs)
         self.backbone_model = ResNetBackbone(
@@ -54,5 +56,18 @@ class ResNet(Module):
     def call(self, inputs, training=None, mask=None):
         outputs = self.backbone_model(inputs)
         if isinstance(outputs, tf.Tensor):
-            return [outputs]
-        return outputs[-self.num_last_blocks:]
+            outputs = [outputs]
+        outputs = outputs[-self.num_last_blocks :]
+
+        named_outputs = {}
+        for fm_id, o in enumerate(outputs):
+            named_outputs[f"fm{fm_id}"] = o
+        return named_outputs
+
+
+class FeatureMapDescEstimator:
+    def __call__(self, image: tf.Tensor, feature_map: tf.Tensor, **kwargs):
+        fm_desc = FeatureMapDesc(
+            *feature_map.shape[1:3].as_list(), *image.shape[1:3].as_list()
+        )
+        return fm_desc
