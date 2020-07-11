@@ -69,6 +69,7 @@ class SingleConvHead(Head):
         )
 
     def call(self, inputs: tf.Tensor, training: bool = None, mask=None):
+
         h = self.conv1(inputs)
         h = self.conv1bn(h)
         h = self.conv1act(h)

@@ -19,7 +19,7 @@ class Retina(keras.Model):
         image_dim = 224
         self.backbone = ResNet(
             input_shape=(image_dim, image_dim, 3),
-            units_per_block=(3, 3),
+            units_per_block=(1, 1),
             num_last_blocks=1,
         )
 
@@ -30,7 +30,7 @@ class Retina(keras.Model):
         self.box_head.set_targets(box_shape_ta)
         self.box_head.set_losses(losses.L1Loss(box_shape_ta), 10.0)
 
-        box_objectness_ta = BoxCenterObjectnessTarget(pos_weights=5.0)
+        box_objectness_ta = BoxCenterIgnoreMarginObjectnessTarget(pos_weights=5.0)
         self.objectness_head.set_targets(box_objectness_ta)
         self.objectness_head.set_losses(
             losses.BCELoss(
@@ -88,7 +88,7 @@ class Retina(keras.Model):
         obj_loss = self.objectness_head.compute_losses(
             obj_loss_targets, predictions["objectness"]
         )
-        l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-4, model=self)()
+        l2_reg_fn = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)()
         box_loss = tf.reduce_mean(box_loss)
         obj_loss = tf.reduce_mean(obj_loss)
         loss = box_loss + obj_loss + l2_reg_fn
