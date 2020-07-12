@@ -163,18 +163,33 @@ class NodeLoss:
 
 class BoxShapeLoss(NodeLoss):
     def __init__(self, inputs: List[str]):
-        super().__init__(inputs, weight=10.0)
+        super().__init__(inputs, weight=5.0)
         self.box_shape_ta = BoxShapeTarget()
         self.loss = losses.L1Loss(self.box_shape_ta)
         self.loss_tracker = keras.metrics.Mean(name="box_loss")
         self.fm_desc: FeatureMapDesc = None
 
     def call(
-        self, fm_desc: FeatureMapDesc, batch_frame: LabelsFrame, predicted: tf.Tensor
+        self,
+        fm_desc: FeatureMapDesc,
+        batch_frame: LabelsFrame,
+        predicted: tf.Tensor,
+        per_anchor_loss: bool = False,
     ) -> tf.Tensor:
         targets = self.box_shape_ta.get_targets_tensors(fm_desc, batch_frame)
         self.fm_desc = fm_desc
-        return self.loss.call(targets, predicted)
+        return self.loss.call(targets, predicted, per_anchor_loss=per_anchor_loss)
+
+    def __call__(
+        self,
+        fm_desc: FeatureMapDesc,
+        batch_frame: LabelsFrame,
+        predicted: tf.Tensor,
+        per_anchor_loss: bool = False,
+    ):
+        return self.call(
+            fm_desc, batch_frame, predicted, per_anchor_loss=per_anchor_loss
+        )
 
     def decode_predictions(self, outputs):
         return self.box_shape_ta.postprocess_predictions(self.fm_desc, outputs)
@@ -194,14 +209,35 @@ class BoxObjectnessLoss(NodeLoss):
         self.fm_desc: FeatureMapDesc = None
 
     def call(
-        self, fm_desc: FeatureMapDesc, batch_frame: LabelsFrame, predicted: tf.Tensor
+        self,
+        fm_desc: FeatureMapDesc,
+        batch_frame: LabelsFrame,
+        predicted: tf.Tensor,
+        per_anchor_loss: bool = False,
     ) -> tf.Tensor:
         targets = self.box_objectness_ta.get_targets_tensors(fm_desc, batch_frame)
         self.fm_desc = fm_desc
-        return self.loss.call(targets, predicted)
+        return self.loss.call(targets, predicted, per_anchor_loss=per_anchor_loss)
+
+    def __call__(
+        self,
+        fm_desc: FeatureMapDesc,
+        batch_frame: LabelsFrame,
+        predicted: tf.Tensor,
+        per_anchor_loss: bool = False,
+    ):
+        return self.call(
+            fm_desc, batch_frame, predicted, per_anchor_loss=per_anchor_loss
+        )
 
     def decode_predictions(self, outputs):
         return self.box_objectness_ta.postprocess_predictions(self.fm_desc, outputs)
+
+
+class InputNode:
+    def __init__(self, name: str, getter):
+        self.name = name
+        self.getter = getter
 
 
 class Node:
@@ -211,31 +247,39 @@ class Node:
         inputs: List[str],
         net: Union[keras.Model, Any],
         loss: NodeLoss = None,
-        inputs_as_list: bool = False
+        inputs_as_list: bool = False,
+        call_kwargs={},
     ):
         self.name = name
         self.inputs = inputs
         self.net = net
         self.loss = loss
         self.inputs_as_list = inputs_as_list
+        self.call_kwargs = call_kwargs
 
 
 class NeuralGraph:
     def __init__(self):
         self.nodes = []
+        self.input_nodes = []
 
-    def add(self, node: Node):
-        self.nodes.append(node)
+    def add(self, node: Union[Node, InputNode]):
+        if isinstance(node, Node):
+            self.nodes.append(node)
+        elif isinstance(node, InputNode):
+            self.input_nodes.append(node)
+        else:
+            raise ValueError("Error node type", node)
 
 
 class KerasGraph(keras.Model):
-    def __new__(cls, graph, name):
+    def __new__(cls, graph: NeuralGraph, name):
         instance = super(KerasGraph, cls).__new__(cls, name=name)
         # make keras aware of all trainable layers
         instance.nodes = [n.net for n in graph.nodes]
         return instance
 
-    def __init__(self, graph, name: str):
+    def __init__(self, graph: NeuralGraph, name: str):
         super().__init__(name=name)
         self.graph = graph
         self.nodes_inputs_outputs = {}
@@ -243,15 +287,21 @@ class KerasGraph(keras.Model):
         self.loss_tracker = keras.metrics.Mean(name="loss")
 
     def call(self, inputs, training: bool = False, mask=None):
-        image = inputs
-        tensors = {"image": image / 255.0}
+        assert self.graph.input_nodes != []
+
+        tensors = {}
+        for node in self.graph.input_nodes:
+            tensors[node.name] = node.getter(inputs)
+
+        tensors["image"] = tensors["image"] / 255.0
+
         for node in self.graph.nodes:
             inputs = [tensors[name] for name in node.inputs]
-
+            print(f"> {node.name}({node.inputs}, inputs_as_list={node.inputs_as_list})")
             if node.inputs_as_list:
-                outputs = node.net(inputs, training=training)
+                outputs = node.net(inputs, training=training, **node.call_kwargs)
             else:
-                outputs = node.net(*inputs, training=training)
+                outputs = node.net(*inputs, training=training, **node.call_kwargs)
 
             node_name = node.name
             if isinstance(outputs, dict):
@@ -265,29 +315,64 @@ class KerasGraph(keras.Model):
         self.nodes_inputs_outputs = tensors
         return {k: v for k, v in tensors.items() if isinstance(v, tf.Tensor)}
 
+    def compile(
+        self,
+        optimizer="rmsprop",
+        loss=None,
+        metrics=None,
+        loss_weights=None,
+        sample_weight_mode=None,
+        weighted_metrics=None,
+        **kwargs,
+    ):
+        super().compile(
+            optimizer,
+            loss,
+            metrics,
+            loss_weights,
+            sample_weight_mode,
+            weighted_metrics,
+            **kwargs,
+        )
+        self.loss_tracker.reset_states()
+        for node in self.graph.nodes:
+            if node.loss is None:
+                continue
+            if isinstance(node.loss.loss_tracker, dict):
+                for k, tracker in node.loss.loss_tracker.items():
+                    tracker.reset_states()
+            else:
+                node.loss.loss_tracker.reset_states()
+
     def train_step(self, data):
         batch_data = ImageData.from_dict(data)
 
         with tf.GradientTape() as tape:
-            outputs = self(batch_data.features.image, training=True)
+            outputs = self(data, training=True)
             outputs["labels"] = batch_data.labels
             for k, v in self.nodes_inputs_outputs.items():
                 if k not in outputs:
                     outputs[k] = v
+
+            l2_loss = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)()
+            total_loss = l2_loss
 
             nodes_losses = {}
             for node in self.graph.nodes:
                 if node.loss is None:
                     continue
                 inputs = [outputs[name] for name in node.loss.inputs]
-
                 loss = node.loss.call(*inputs)
-                nodes_losses[node.name] = node.loss.weight * tf.reduce_mean(loss)
-
-            l2_loss = kd_utils.get_l2_loss_fn(l2_reg=1e-5, model=self)()
-            total_loss = l2_loss
-            for k, v in nodes_losses.items():
-                total_loss = total_loss + v
+                if isinstance(loss, dict):
+                    node_loss = {
+                        k: node.loss.weight * tf.reduce_mean(l) for k, l in loss.items()
+                    }
+                    nodes_losses[node.name] = node_loss
+                    total_loss = total_loss + tf.add_n(list(node_loss.values()))
+                else:
+                    node_loss = node.loss.weight * tf.reduce_mean(loss)
+                    nodes_losses[node.name] = node_loss
+                    total_loss = total_loss + node_loss
 
         # Compute gradients
         trainable_vars = self.trainable_variables
@@ -297,16 +382,22 @@ class KerasGraph(keras.Model):
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
         # Compute our own metrics
-        metrics = {}
+        self.loss_tracker.update_state(total_loss)
+        metrics = {"loss": self.loss_tracker.result(), "l2_loss": l2_loss}
+
         for node in self.graph.nodes:
             if node.loss is None:
                 continue
-            node.loss.loss_tracker.update_state(nodes_losses[node.name])
-            tracker = node.loss.loss_tracker
-            metrics[tracker.name] = tracker.result()
-
-        self.loss_tracker.update_state(total_loss)
-        metrics["loss"] = self.loss_tracker.result()
+            loss = nodes_losses[node.name]
+            if isinstance(loss, dict):
+                for k, v in loss.items():
+                    tracker = node.loss.loss_tracker[k]
+                    tracker.update_state(v)
+                    metrics[f"{node.name}/{tracker.name}"] = tracker.result()
+            else:
+                node.loss.loss_tracker.update_state(loss)
+                tracker = node.loss.loss_tracker
+                metrics[tracker.name] = tracker.result()
         return metrics
 
 

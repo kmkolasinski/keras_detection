@@ -26,14 +26,14 @@ class FeatureMapPredictionTargetLoss(tf.keras.losses.Loss, ABC):
     ) -> tf.Tensor:
         pass
 
-    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor, per_anchor_loss: bool = False) -> tf.Tensor:
         y_true, weights = self.target_def.to_targets_and_weights(y_true)
 
         fm_height, fm_width = y_pred.shape[1:3]
         if weights is None:
             weights = tf.ones([1, fm_height, fm_width, 1])
 
-        if self.per_anchor_loss:
+        if per_anchor_loss:
             loss = self.compute_per_anchor_loss(y_true, y_pred, weights=weights)
             loss = tf.reshape(loss, [-1, fm_height, fm_width])
             return loss

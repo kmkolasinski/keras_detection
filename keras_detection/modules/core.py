@@ -4,7 +4,9 @@ keras = tf.keras
 
 
 class Module(keras.Model):
-    pass
+
+    def call(self, **kwargs):
+        super().call(**kwargs)
 
 """
 graph = Graph("Faster-RCNN")

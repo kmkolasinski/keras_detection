@@ -16,7 +16,13 @@ class FPN(Module):
     ):
         super().__init__(name=name, *args, **kwargs)
         self.num_first_blocks = num_first_blocks
+        self.input_shapes = input_shapes
         self.fpn = build_fpn(input_shapes, depth, name=f"{name}/model")
+        self.init()
+
+    def init(self):
+        inputs = [tf.keras.Input(shape=shape) for shape in self.input_shapes]
+        self(inputs)
 
     def call(self, inputs, training=None, mask=None):
         outputs = self.fpn(inputs)
