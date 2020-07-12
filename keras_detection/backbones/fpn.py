@@ -55,7 +55,7 @@ class FPNBackbone(Backbone):
 
 
 def build_fpn(
-    feature_maps_shapes: List[Tuple[int, int, int]], depth: int
+    feature_maps_shapes: List[Tuple[int, int, int]], depth: int, name: str="fpn"
 ) -> keras.Model:
     feature_maps = [
         keras.layers.Input(shape=shape, name=f"fpn_input_{i}")
@@ -102,7 +102,7 @@ def build_fpn(
     for o in outputs:
         _logger.info(f" => {o.shape}")
 
-    model = keras.models.Model(feature_maps, outputs[::-1], name="fpn")
+    model = keras.models.Model(feature_maps, outputs[::-1], name=name)
     return model
 
 

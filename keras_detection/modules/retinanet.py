@@ -4,6 +4,7 @@ from typing import List, Union, Any
 import tensorflow as tf
 from tensorflow.python.keras import Input
 
+from keras_detection.modules.backbones.fpn import FPN
 from keras_detection.modules.heads.heads import SingleConvHead
 from keras_detection.targets.box_shape import BoxShapeTarget
 from keras_detection.targets.box_objectness import (
@@ -210,11 +211,13 @@ class Node:
         inputs: List[str],
         net: Union[keras.Model, Any],
         loss: NodeLoss = None,
+        inputs_as_list: bool = False
     ):
         self.name = name
         self.inputs = inputs
         self.net = net
         self.loss = loss
+        self.inputs_as_list = inputs_as_list
 
 
 class NeuralGraph:
@@ -227,7 +230,6 @@ class NeuralGraph:
 
 class KerasGraph(keras.Model):
     def __new__(cls, graph, name):
-        print(graph, name)
         instance = super(KerasGraph, cls).__new__(cls, name=name)
         # make keras aware of all trainable layers
         instance.nodes = [n.net for n in graph.nodes]
@@ -245,7 +247,12 @@ class KerasGraph(keras.Model):
         tensors = {"image": image / 255.0}
         for node in self.graph.nodes:
             inputs = [tensors[name] for name in node.inputs]
-            outputs = node.net(*inputs, training=training)
+
+            if node.inputs_as_list:
+                outputs = node.net(inputs, training=training)
+            else:
+                outputs = node.net(*inputs, training=training)
+
             node_name = node.name
             if isinstance(outputs, dict):
                 for k, v in outputs.items():
@@ -310,8 +317,12 @@ class RetinaGraph(NeuralGraph):
         image_dim = 224
         backbone = ResNet(
             input_shape=(image_dim, image_dim, 3),
-            units_per_block=(1, 1),
-            num_last_blocks=1,
+            units_per_block=(1, 1, 1),
+            num_last_blocks=2,
+        )
+
+        fpn = FPN(
+            input_shapes=backbone.get_output_shapes(), depth=64, num_first_blocks=1
         )
 
         box_head = SingleConvHead("box_shape", 4, activation=None)
@@ -327,8 +338,16 @@ class RetinaGraph(NeuralGraph):
         )
         self.add(
             Node(
+                "fpn",
+                inputs=backbone.get_output_names("backbone"),
+                inputs_as_list=True,
+                net=fpn,
+            )
+        )
+        self.add(
+            Node(
                 "boxes",
-                inputs=["backbone/fm0"],
+                inputs=["fpn/fm0"],
                 net=box_head,
                 loss=BoxShapeLoss(inputs=["backbone/fm0/desc", "labels", "boxes"]),
             )
@@ -336,7 +355,7 @@ class RetinaGraph(NeuralGraph):
         self.add(
             Node(
                 "objectness",
-                inputs=["backbone/fm0"],
+                inputs=["fpn/fm0"],
                 net=objectness_head,
                 loss=BoxObjectnessLoss(
                     inputs=["backbone/fm0/desc", "labels", "objectness"]

@@ -1,9 +1,10 @@
 from typing import Tuple, Any, List
 
+import tensorflow as tf
+
 from keras_detection import FeatureMapDesc
 from keras_detection.backbones.resnet import ResNetBackbone
 from keras_detection.modules.core import Module
-import tensorflow as tf
 
 
 class ResNet(Module):
@@ -42,7 +43,7 @@ class ResNet(Module):
         **kwargs,
     ):
         super().__init__(name=name, *args, **kwargs)
-        self.backbone_model = ResNetBackbone(
+        self.backbone = ResNetBackbone(
             input_shape=input_shape,
             num_last_blocks=num_last_blocks,
             units_per_block=units_per_block,
@@ -51,10 +52,19 @@ class ResNet(Module):
             name=name,
         ).backbone
         self.num_last_blocks = num_last_blocks
-        self.build(input_shape=(None, *input_shape))
+        # Initialize output and shapes
+        self(tf.keras.Input(shape=input_shape, name="image"))
+
+    def get_output_shapes(self) -> List[Tuple[int, int, int]]:
+        shapes = self.output_shape
+        return [shapes[f"fm{k}"][1:] for k in range(len(shapes))]
+
+    def get_output_names(self, name: str) -> List[str]:
+        shapes = self.output_shape
+        return [f"{name}/fm{k}" for k in range(len(shapes))]
 
     def call(self, inputs, training=None, mask=None):
-        outputs = self.backbone_model(inputs)
+        outputs = self.backbone(inputs)
         if isinstance(outputs, tf.Tensor):
             outputs = [outputs]
         outputs = outputs[-self.num_last_blocks :]
