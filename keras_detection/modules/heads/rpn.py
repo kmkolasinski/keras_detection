@@ -23,5 +23,5 @@ class RPN(Module):
     def call(self, fm_desc: FeatureMapDesc, feature_map: tf.Tensor, training: bool = None, mask=None):
         raw_boxes = self.box_head(feature_map)
         objectness = self.objectness_head(feature_map)
-        proposals = self.box_shape_ta.postprocess_predictions(fm_desc, raw_boxes)
+        proposals = self.box_shape_ta.to_tf_boxes(self.box_shape_ta.postprocess_predictions(fm_desc, raw_boxes))
         return {"proposals": proposals, "raw_boxes": raw_boxes, "objectness": objectness}

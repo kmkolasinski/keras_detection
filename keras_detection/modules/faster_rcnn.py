@@ -4,9 +4,16 @@ from typing import List, Union, Any
 import tensorflow as tf
 from tensorflow.python.keras import Input
 
+from keras_detection.layers.box_matcher import BoxMatcherLayer
+from keras_detection.layers.box_regression import BoxRegressionTargetsBuilder
 from keras_detection.modules.backbones.fpn import FPN
 from keras_detection.modules.heads.heads import SingleConvHead
 from keras_detection.modules.heads.rpn import RPN
+from keras_detection.modules.layers import (
+    ROISamplingLayer,
+    ROINMSSamplingLayer,
+    SimpleConvHeadLayer,
+)
 from keras_detection.modules.retinanet import (
     NeuralGraph,
     Node,
@@ -49,7 +56,7 @@ class RPNLoss(NodeLoss):
         batch_frame: LabelsFrame,
         boxes: tf.Tensor,
         objectness: tf.Tensor,
-        per_anchor_loss=False,
+        per_anchor_loss: bool = False,
     ):
         box_loss = tf.constant(self.box_loss.weight) * self.box_loss.call(
             fm_desc, batch_frame, boxes, per_anchor_loss=per_anchor_loss
@@ -73,8 +80,26 @@ class RPNLoss(NodeLoss):
         )
 
 
+class L1Loss(NodeLoss):
+    def __init__(self, inputs: List[str]):
+        super().__init__(inputs, weight=10.0)
+        self.loss_tracker = keras.metrics.Mean(name="box_regression_loss")
+
+    def call(
+        self,
+        regression_targets: tf.Tensor,
+        regression_weights: tf.Tensor,
+        predictions: tf.Tensor,
+    ):
+        w = tf.constant(self.weight)
+        box_loss = tf.reduce_sum(tf.abs(regression_targets - predictions), axis=-1)
+        box_loss = box_loss * regression_weights
+        box_loss = tf.reduce_mean(tf.reduce_mean(box_loss, -1), -1)
+        return w * box_loss
+
+
 class FasterRCNNGraph(NeuralGraph):
-    def __init__(self):
+    def __init__(self, num_classes: int):
         super().__init__()
 
         image_dim = 224
@@ -116,12 +141,53 @@ class FasterRCNNGraph(NeuralGraph):
         self.add(
             Node("rpn", inputs=["backbone/fm0/desc", "fpn/fm0"], net=rpn, loss=rpn_loss)
         )
-        # For sampling proposals
+
+        roi_sampling = ROINMSSamplingLayer(num_samples=64, crop_size=(7, 7))
         self.add(
             Node(
-                "rpn/loss",
-                inputs=rpn_loss.inputs,
-                net=rpn_loss,
-                call_kwargs={"per_anchor_loss": True},
+                "roi_sampler",
+                inputs=["fpn/fm0", "rpn/proposals", "rpn/objectness"],
+                net=roi_sampling,
+            )
+        )
+
+        self.add(
+            Node(
+                "box_matcher",
+                inputs=["labels", "roi_sampler/proposals"],
+                net=BoxMatcherLayer(),
+            )
+        )
+
+        self.add(
+            Node(
+                "box_regression",
+                inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
+                net=BoxRegressionTargetsBuilder(),
+            )
+        )
+
+        # self.add(
+        #     Node(
+        #         "rois/classes",
+        #         inputs=["roi_sampler/rois"],
+        #         net=SimpleConvHeadLayer(
+        #             num_filters=128, num_outputs=num_classes, activation="sigmoid"
+        #         ),
+        #     )
+        # )
+
+        self.add(
+            Node(
+                "rois/boxes",
+                inputs=["roi_sampler/rois"],
+                net=SimpleConvHeadLayer(num_filters=128, num_outputs=4),
+                loss=L1Loss(
+                    inputs=[
+                        "box_regression/targets",
+                        "box_regression/weights",
+                        "rois/boxes",
+                    ]
+                ),
             )
         )
