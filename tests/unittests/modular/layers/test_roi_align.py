@@ -1,7 +1,7 @@
 import tensorflow as tf
 from keras_detection import LabelsFrame
-from keras_detection.layers import roi_align
-from keras_detection.layers.roi_align import ROIAlignLayer
+from keras_detection.modules.layers import roi_align
+from keras_detection.modules.layers.roi_align import ROIAlignLayer
 
 
 class ROIAlignTest(tf.test.TestCase):

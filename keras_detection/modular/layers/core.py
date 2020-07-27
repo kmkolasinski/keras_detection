@@ -2,14 +2,14 @@ from typing import Tuple
 
 import tensorflow as tf
 
-from keras_detection.layers.roi_align import ROIAlignLayer
-from keras_detection.modules.core import Module
+from keras_detection.modular.layers.roi_align import ROIAlignLayer
+from keras_detection.modular.core import Module, TrainableModule
 from keras_detection.targets import feature_map_sampling as fm_sampling
 
 keras = tf.keras
 
 
-class ROISamplingLayer(Module):
+class ROISamplingLayer(TrainableModule):
     def __init__(self, num_samples: int, crop_size: Tuple[int, int], **kwargs):
         super().__init__(**kwargs)
         self.crop_size = crop_size
@@ -39,7 +39,7 @@ class ROISamplingLayer(Module):
         }
 
 
-class ROINMSSamplingLayer(Module):
+class ROINMSSamplingLayer(TrainableModule):
     def __init__(self, num_samples: int, crop_size: Tuple[int, int], **kwargs):
         super().__init__(**kwargs)
         self.crop_size = crop_size
@@ -102,7 +102,7 @@ class ROINMSSamplingLayer(Module):
         }
 
 
-class SimpleConvHeadLayer(Module):
+class SimpleConvHeadLayer(TrainableModule):
 
     def __init__(self, num_filters: int, num_outputs: int, activation: str = None, **kwargs):
         super().__init__(**kwargs)
@@ -121,7 +121,7 @@ class SimpleConvHeadLayer(Module):
             keras.layers.Dense(num_outputs, use_bias=False),
         ])
 
-    def __call__(self, inputs: tf.Tensor, **kwargs) -> tf.Tensor:
+    def call(self, inputs: tf.Tensor, **kwargs) -> tf.Tensor:
 
         batch_size, num_samples, height, width, num_channels = inputs.shape.as_list()
         inputs = tf.reshape(inputs, [batch_size * num_samples, height, width, num_channels])

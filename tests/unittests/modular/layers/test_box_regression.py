@@ -3,10 +3,10 @@ import tensorflow as tf
 import keras_detection.datasets.datasets_ops as datasets_ops
 import keras_detection.datasets.random_rectangles as random_rects
 from keras_detection import ImageData
-from keras_detection.layers.box_matcher import BoxMatcherLayer
+from keras_detection.modules.layers import BoxMatcherLayer
 import numpy as np
 
-from keras_detection.layers.box_regression import BoxRegressionTargetsBuilder
+from keras_detection.modules.layers import BoxRegressionTargetsBuilder
 
 
 class BoxRegressionTargetBuilderTest(tf.test.TestCase):

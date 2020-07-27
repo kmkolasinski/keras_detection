@@ -5,15 +5,16 @@ import tensorflow as tf
 from numba import jit
 
 from keras_detection import LabelsFrame
+from keras_detection.modular.core import Module
 from keras_detection.ops import np_frame_ops
 
 
-class BoxMatcherLayer:
+class BoxMatcherLayer(Module):
 
     def __init__(self, iou_threshold: float = 0.35):
         self.iou_threshold = iou_threshold
 
-    def __call__(
+    def call(
         self, targets_batch_frame: LabelsFrame, predicted_boxes: tf.Tensor, training: bool = True
     ) -> Dict[str, tf.Tensor]:
 

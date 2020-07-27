@@ -5,14 +5,13 @@ import tensorflow as tf
 from numba import jit
 
 from keras_detection import LabelsFrame
+from keras_detection.modular.core import Module
 from keras_detection.ops import np_frame_ops
 
 
-class BoxRegressionTargetsBuilder:
-    def __init__(self):
-        pass
+class BoxRegressionTargetsBuilder(Module):
 
-    def __call__(
+    def call(
         self,
         targets_batch_frame: LabelsFrame,
         sampled_proposals: tf.Tensor,

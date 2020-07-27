@@ -94,6 +94,9 @@ class BoxOffsetTarget(FeatureMapPredictionTarget):
 
 @dataclass
 class BoxShapeTarget(FeatureMapPredictionTarget):
+    # Postprocess boxes and return them in TF format [ymin, xmin, ymax, xmax]
+    use_tf_format: bool = False
+
     @property
     def num_outputs(self) -> int:
         return 4
@@ -144,6 +147,8 @@ class BoxShapeTarget(FeatureMapPredictionTarget):
                 fm_scale_map[0, i, j, 3] = fm_desc.fm_width
 
         predictions = (predictions + shift_map) / fm_scale_map
+        if self.use_tf_format:
+            return self.to_tf_boxes(predictions)
         return predictions
 
     def to_tf_boxes(self, postprocessed_boxes: tf.Tensor) -> tf.Tensor:

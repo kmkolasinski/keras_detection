@@ -1,36 +1,21 @@
-from abc import abstractmethod
-from typing import List, Union, Any
+from typing import List
 
 import tensorflow as tf
-from tensorflow.python.keras import Input
 
-from keras_detection.layers.box_matcher import BoxMatcherLayer
-from keras_detection.layers.box_regression import BoxRegressionTargetsBuilder
-from keras_detection.modules.backbones.fpn import FPN
-from keras_detection.modules.heads.heads import SingleConvHead
-from keras_detection.modules.heads.rpn import RPN
-from keras_detection.modules.layers import (
-    ROISamplingLayer,
+from keras_detection.modular.core import NodeLoss, NeuralGraph, InputNode, Node
+from keras_detection.modular.layers.box_matcher import BoxMatcherLayer
+from keras_detection.modular.layers.box_regression import BoxRegressionTargetsBuilder
+from keras_detection.modular.backbones.fpn import FPN
+from keras_detection.modular.heads.rpn import RPN
+from keras_detection.modular.layers.core import (
     ROINMSSamplingLayer,
     SimpleConvHeadLayer,
 )
-from keras_detection.modules.retinanet import (
-    NeuralGraph,
-    Node,
-    BoxShapeLoss,
-    NodeLoss,
-    BoxObjectnessLoss,
-    InputNode,
-)
-from keras_detection.targets.box_shape import BoxShapeTarget
-from keras_detection.targets.box_objectness import (
-    BoxCenterIgnoreMarginObjectnessTarget,
-    BoxCenterObjectnessTarget,
-)
+from keras_detection.modular.models.retinanet import BoxShapeLoss, BoxObjectnessLoss
+
 from keras_detection.structures import FeatureMapDesc, ImageData, LabelsFrame
-import keras_detection.losses as losses
-from keras_detection.modules.backbones.resnet import ResNet, FeatureMapDescEstimator
-import keras_detection.models.utils as kd_utils
+from keras_detection.modular.backbones.resnet import ResNet
+from keras_detection.modular.backbones.core import FeatureMapDescEstimator
 
 keras = tf.keras
 
@@ -118,12 +103,12 @@ class FasterRCNNGraph(NeuralGraph):
         )
         self.add(InputNode("labels", getter=lambda d: ImageData.from_dict(d).labels))
 
-        self.add(Node("backbone", inputs=["image"], net=backbone))
+        self.add(Node("backbone", inputs=["image"], module=backbone))
         self.add(
             Node(
                 "backbone/fm0/desc",
                 inputs=["image", "backbone/fm0"],
-                net=FeatureMapDescEstimator(),
+                module=FeatureMapDescEstimator(),
             )
         )
         self.add(
@@ -131,7 +116,7 @@ class FasterRCNNGraph(NeuralGraph):
                 "fpn",
                 inputs=backbone.get_output_names("backbone"),
                 inputs_as_list=True,
-                net=fpn,
+                module=fpn,
             )
         )
 
@@ -139,7 +124,7 @@ class FasterRCNNGraph(NeuralGraph):
         rpn_loss = RPNLoss(inputs=["backbone/fm0/desc", "labels"])
 
         self.add(
-            Node("rpn", inputs=["backbone/fm0/desc", "fpn/fm0"], net=rpn, loss=rpn_loss)
+            Node("rpn", inputs=["backbone/fm0/desc", "fpn/fm0"], module=rpn, loss=rpn_loss)
         )
 
         roi_sampling = ROINMSSamplingLayer(num_samples=64, crop_size=(7, 7))
@@ -147,7 +132,7 @@ class FasterRCNNGraph(NeuralGraph):
             Node(
                 "roi_sampler",
                 inputs=["fpn/fm0", "rpn/proposals", "rpn/objectness"],
-                net=roi_sampling,
+                module=roi_sampling,
             )
         )
 
@@ -155,7 +140,7 @@ class FasterRCNNGraph(NeuralGraph):
             Node(
                 "box_matcher",
                 inputs=["labels", "roi_sampler/proposals"],
-                net=BoxMatcherLayer(),
+                module=BoxMatcherLayer(),
             )
         )
 
@@ -163,7 +148,7 @@ class FasterRCNNGraph(NeuralGraph):
             Node(
                 "box_regression",
                 inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
-                net=BoxRegressionTargetsBuilder(),
+                module=BoxRegressionTargetsBuilder(),
             )
         )
 
@@ -181,7 +166,7 @@ class FasterRCNNGraph(NeuralGraph):
             Node(
                 "rois/boxes",
                 inputs=["roi_sampler/rois"],
-                net=SimpleConvHeadLayer(num_filters=128, num_outputs=4),
+                module=SimpleConvHeadLayer(num_filters=128, num_outputs=4),
                 loss=L1Loss(
                     inputs=[
                         "box_regression/targets",

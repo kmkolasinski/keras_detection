@@ -1,10 +1,10 @@
 from typing import Tuple, List
 from keras_detection.backbones.fpn import build_fpn
-from keras_detection.modules.core import Module
+from keras_detection.modular.core import TrainableModule
 import tensorflow as tf
 
 
-class FPN(Module):
+class FPN(TrainableModule):
     def __init__(
         self,
         input_shapes: List[Tuple[int, int, int]],

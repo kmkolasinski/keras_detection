@@ -1,13 +1,10 @@
 from typing import Tuple, Any, List
-
+from keras_detection.backbones.resnet import ResNetBackbone
+from keras_detection.modular.core import TrainableModule
 import tensorflow as tf
 
-from keras_detection import FeatureMapDesc
-from keras_detection.backbones.resnet import ResNetBackbone
-from keras_detection.modules.core import Module
 
-
-class ResNet(Module):
+class ResNet(TrainableModule):
     """Instantiates the ResNet, SEResNet architecture.
     Optionally loads weights pre-trained on ImageNet.
     Note that the data format convention used by the model is
@@ -75,9 +72,3 @@ class ResNet(Module):
         return named_outputs
 
 
-class FeatureMapDescEstimator:
-    def __call__(self, image: tf.Tensor, feature_map: tf.Tensor, **kwargs):
-        fm_desc = FeatureMapDesc(
-            *feature_map.shape[1:3].as_list(), *image.shape[1:3].as_list()
-        )
-        return fm_desc

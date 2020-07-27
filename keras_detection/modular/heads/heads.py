@@ -5,13 +5,13 @@ import tensorflow as tf
 from keras_detection import FeatureMapPredictionTarget, FeatureMapDesc, ImageData
 from keras_detection.losses import FeatureMapPredictionTargetLoss
 from keras_detection.metrics import FeatureMapPredictionTargetMetric
-from keras_detection.modules.core import Module
+from keras_detection.modular.core import TrainableModule
 
 keras = tf.keras
 LOGGER = tf.get_logger()
 
 
-class Head(Module):
+class Head(TrainableModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_assigners: FeatureMapPredictionTarget = None

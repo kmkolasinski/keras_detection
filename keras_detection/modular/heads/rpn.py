@@ -1,18 +1,12 @@
 from keras_detection import FeatureMapDesc
-from keras_detection.losses import BCELoss
-from keras_detection.modules.core import Module
-from typing import Optional, List, Tuple
-import tensorflow as tf
-from keras_detection.modules.core import Module
-from keras_detection.modules.heads.heads import SingleConvHead
-from keras_detection.targets.box_objectness import BoxCenterIgnoreMarginObjectnessTarget
+from keras_detection.modular.core import TrainableModule
+from keras_detection.modular.heads.heads import SingleConvHead
 from keras_detection.targets.box_shape import BoxShapeTarget
 
-keras = tf.keras
-LOGGER = tf.get_logger()
+import tensorflow as tf
 
 
-class RPN(Module):
+class RPN(TrainableModule):
 
     def __init__(self, name: str = "RPN", *args, **kwargs):
         super().__init__(name=name, *args, **kwargs)
