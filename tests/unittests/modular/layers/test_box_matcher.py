@@ -3,7 +3,7 @@ import tensorflow as tf
 import keras_detection.datasets.datasets_ops as datasets_ops
 import keras_detection.datasets.random_rectangles as random_rects
 from keras_detection import ImageData
-from keras_detection.modular.layers.box_matcher import BoxMatcherLayer
+from keras_detection.modular.rois.box_matcher import BoxMatcherLayer
 import numpy as np
 
 

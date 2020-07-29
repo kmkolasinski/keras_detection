@@ -82,11 +82,11 @@ class FeatureMapHead(TrainableModule):
         self.head = head
         self.head_loss = loss
 
-    def call(self, feature_map: tf.Tensor, training: bool) -> Dict[str, Any]:
+    def call(self, feature_map: tf.Tensor, feature_map_desc: FeatureMapDescEstimator, training: bool) -> Dict[str, Any]:
         predictions = self.head(feature_map, training=training)
-        # TODO loss must have fm_desc defined
+        self.head_loss.fm_desc = feature_map_desc
         postprocessed_outputs = self.head_loss.decode_predictions(predictions)
-        outputs = {self.name: predictions, f"{self.name}/postprocessed": postprocessed_outputs}
+        outputs = {"raw": predictions, f"postprocessed": postprocessed_outputs}
         return outputs
 
     def as_node(self, inputs: List[str]) -> Node:
@@ -137,8 +137,8 @@ class RetinaDetector(NeuralGraph):
             FeatureMapHead(
                 "boxes",
                 head=SingleConvHead("boxes", 4, activation=None),
-                loss=BoxShapeLoss(inputs=["backbone/fm0/desc", "labels", "boxes"]),
-            ).as_node(inputs=["fpn/fm0"])
+                loss=BoxShapeLoss(inputs=["backbone/fm0/desc", "labels", "boxes/raw"]),
+            ).as_node(inputs=["fpn/fm0", "backbone/fm0/desc"])
         )
 
         self.add(
@@ -146,7 +146,7 @@ class RetinaDetector(NeuralGraph):
                 "objectness",
                 head=SingleConvHead("objectness", 1, activation="sigmoid"),
                 loss=BoxObjectnessLoss(
-                    inputs=["backbone/fm0/desc", "labels", "objectness"]
+                    inputs=["backbone/fm0/desc", "labels", "objectness/raw"]
                 ),
-            ).as_node(inputs=["fpn/fm0"])
+            ).as_node(inputs=["fpn/fm0", "backbone/fm0/desc"])
         )
