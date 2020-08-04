@@ -171,12 +171,10 @@ class KerasGraph(keras.Model):
                 node.loss.loss_tracker.reset_states()
 
     def train_step(self, data):
-        # TODO Fix me!
-        batch_data = ImageData.from_dict(data)
 
         with tf.GradientTape() as tape:
             outputs = self(data, training=True)
-            outputs["labels"] = batch_data.labels
+
             for k, v in self.nodes_inputs_outputs.items():
                 if k not in outputs:
                     outputs[k] = v

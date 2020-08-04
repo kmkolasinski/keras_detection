@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Any, Dict
 
 import tensorflow as tf
 from keras_detection.models.box_detector import BoxDetector, BoxDetectionOutput
@@ -8,7 +8,8 @@ from keras_detection.modular.core import (
     NeuralGraph,
     Node,
     ImageInputNode,
-    LabelsInputNode, KerasGraph,
+    LabelsInputNode,
+    KerasGraph,
 )
 from keras_detection.modular.rois.box_classes import BoxClassesTargetsBuilder
 from keras_detection.modular.rois.box_matcher import BoxMatcherLayer
@@ -32,8 +33,9 @@ class RPNLoss(NodeLoss):
         inputs: List[str],
         box_input: str = "rpn/raw_boxes",
         obj_input: str = "rpn/objectness",
+        weight: float = 1.0,
     ):
-        super().__init__([*inputs, box_input, obj_input], weight=1.0)
+        super().__init__([*inputs, box_input, obj_input], weight=weight)
         self.box_loss = BoxShapeLoss(inputs=[*inputs, box_input])
         self.obj_loss = BoxObjectnessLoss(inputs=[*inputs, obj_input])
         self.loss_tracker = {
@@ -72,8 +74,8 @@ class RPNLoss(NodeLoss):
 
 
 class L1Loss(NodeLoss):
-    def __init__(self, inputs: List[str]):
-        super().__init__(inputs, weight=10.0)
+    def __init__(self, inputs: List[str], weight: float = 10.0):
+        super().__init__(inputs, weight=weight)
         self.loss_tracker = keras.metrics.Mean(name="box_regression_loss")
 
     def call(
@@ -90,8 +92,10 @@ class L1Loss(NodeLoss):
 
 
 class BCELoss(NodeLoss):
-    def __init__(self, inputs: List[str], name: str = "box_objectness_loss"):
-        super().__init__(inputs, weight=1.0)
+    def __init__(
+        self, inputs: List[str], name: str = "box_objectness_loss", weight: float = 1.0
+    ):
+        super().__init__(inputs, weight=weight)
         self.loss_tracker = keras.metrics.Mean(name=name)
 
     def call(
@@ -101,51 +105,70 @@ class BCELoss(NodeLoss):
         predictions: tf.Tensor,
     ):
         w = tf.constant(self.weight)
-        obj_loss = tf.losses.binary_crossentropy(objectness_targets, predictions, label_smoothing=0.02)
+        obj_loss = tf.losses.binary_crossentropy(
+            objectness_targets, predictions, label_smoothing=0.02
+        )
         obj_loss = obj_loss * objectness_weights
         obj_loss = tf.reduce_mean(tf.reduce_mean(obj_loss, -1), -1)
         return w * obj_loss
 
 
 class FasterRCNNGraph(NeuralGraph):
-    def __init__(self, num_classes: int, training: bool = True):
+    def __init__(
+        self,
+        image_dim: int,
+        num_classes: Optional[int] = None,
+        training: bool = True,
+        backbone_params: Dict[str, Any] = {},
+        fpn_params: Dict[str, Any] = {},
+        roi_sampling_params: Dict[str, Any] = {},
+        heads_params: Dict[str, Any] = {},
+    ):
         super().__init__()
 
-        image_dim = 224
         self.image_dim = image_dim
         self.num_classes = num_classes
+        self.backbone_params = backbone_params
+        self.fpn_params = fpn_params
+        self.roi_sampling_params = roi_sampling_params
+        self.heads_params = heads_params
+        self.build_graph(self, training=training)
+
+    def build_graph(self, graph: NeuralGraph, training: bool) -> NeuralGraph:
+
         backbone = ResNet(
-            input_shape=(image_dim, image_dim, 3),
-            units_per_block=(1, 1, 1),
-            num_last_blocks=2,
+            input_shape=(self.image_dim, self.image_dim, 3),
+            units_per_block=self.backbone_params.get("units_per_block", (1, 1, 1)),
+            num_last_blocks=self.backbone_params.get("num_last_blocks", 2),
+            init_filters=self.backbone_params.get("init_filters", 64),
         )
 
-        self.add(ImageInputNode())
+        graph.add(ImageInputNode())
         if training:
-            self.add(LabelsInputNode())
+            graph.add(LabelsInputNode())
 
-        self.add(Node("backbone", inputs=["image"], module=backbone))
-        self.add(
+        graph.add(Node("backbone", inputs=["image"], module=backbone))
+        graph.add(
             Node(
                 "backbone/fm0/desc",
                 inputs=["image", "backbone/fm0"],
                 module=FeatureMapDescEstimator(),
             )
         )
-        self.add(
+        graph.add(
             Node(
                 "fpn",
                 inputs=backbone.get_output_names("backbone"),
                 inputs_as_list=True,
                 module=FPN(
                     input_shapes=backbone.get_output_shapes(),
-                    depth=64,
-                    num_first_blocks=1,
+                    depth=self.fpn_params.get("depth", 64),
+                    num_first_blocks=self.fpn_params.get("num_first_blocks", 1),
                 ),
             )
         )
 
-        self.add(
+        graph.add(
             Node(
                 "rpn",
                 inputs=["backbone/fm0/desc", "fpn/fm0"],
@@ -154,15 +177,18 @@ class FasterRCNNGraph(NeuralGraph):
             )
         )
 
-        self.add(
+        graph.add(
             Node(
                 "roi_sampler",
                 inputs=["fpn/fm0", "rpn/proposals", "rpn/objectness"],
-                module=ROINMSSamplingLayer(num_samples=64, crop_size=(7, 7)),
+                module=ROINMSSamplingLayer(
+                    num_samples=self.roi_sampling_params.get("num_samples", 64),
+                    crop_size=self.roi_sampling_params.get("crop_size", (7, 7)),
+                ),
             )
         )
         if training:
-            self.add(
+            graph.add(
                 Node(
                     "box_matcher",
                     inputs=["labels", "roi_sampler/proposals"],
@@ -170,37 +196,51 @@ class FasterRCNNGraph(NeuralGraph):
                 )
             )
 
-            self.add(
+            graph.add(
                 Node(
                     "rois_box_regression",
-                    inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
+                    inputs=[
+                        "labels",
+                        "roi_sampler/proposals",
+                        "box_matcher/match_indices",
+                    ],
                     module=BoxRegressionTargetsBuilder(),
                 )
             )
 
-            self.add(
+            graph.add(
                 Node(
                     "rois_box_objectness",
-                    inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
+                    inputs=[
+                        "labels",
+                        "roi_sampler/proposals",
+                        "box_matcher/match_indices",
+                    ],
                     module=BoxObjectnessTargetsBuilder(),
                 )
             )
 
-            self.add(
-                Node(
-                    "rois_box_classes",
-                    inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
-                    module=BoxClassesTargetsBuilder(num_classes),
+            if self.num_classes:
+                graph.add(
+                    Node(
+                        "rois_box_classes",
+                        inputs=[
+                            "labels",
+                            "roi_sampler/proposals",
+                            "box_matcher/match_indices",
+                        ],
+                        module=BoxClassesTargetsBuilder(self.num_classes),
+                    )
                 )
-            )
 
-
-        self.add(
+        graph.add(
             Node(
                 "rois/objectness",
                 inputs=["roi_sampler/rois"],
                 module=SimpleConvHeadLayer(
-                    num_filters=128, num_outputs=1, activation="sigmoid"
+                    num_filters=self.heads_params.get("num_filters", 128),
+                    num_outputs=1,
+                    activation="sigmoid",
                 ),
                 loss=BCELoss(
                     inputs=[
@@ -212,11 +252,13 @@ class FasterRCNNGraph(NeuralGraph):
             )
         )
 
-        self.add(
+        graph.add(
             Node(
                 "rois/boxes",
                 inputs=["roi_sampler/rois"],
-                module=SimpleConvHeadLayer(num_filters=128, num_outputs=4),
+                module=SimpleConvHeadLayer(
+                    num_filters=self.heads_params.get("num_filters", 128), num_outputs=4
+                ),
                 loss=L1Loss(
                     inputs=[
                         "rois_box_regression/targets",
@@ -226,29 +268,38 @@ class FasterRCNNGraph(NeuralGraph):
                 ),
             )
         )
-
-        self.add(
-            Node(
-                "rois/classes",
-                inputs=["roi_sampler/rois"],
-                module=SimpleConvHeadLayer(
-                    # plus dustbin
-                    num_filters=128, num_outputs=num_classes + 1, activation="sigmoid"
-                ),
-                loss=BCELoss(
-                    name="box_classes_loss",
-                    inputs=[
-                        "rois_box_classes/targets",
-                        "rois_box_classes/weights",
-                        "rois/classes",
-                    ]
-                ),
+        if self.num_classes:
+            graph.add(
+                Node(
+                    "rois/classes",
+                    inputs=["roi_sampler/rois"],
+                    module=SimpleConvHeadLayer(
+                        # plus dustbin
+                        num_filters=self.heads_params.get("num_filters", 128),
+                        num_outputs=self.num_classes + 1,
+                        activation="sigmoid",
+                    ),
+                    loss=BCELoss(
+                        name="box_classes_loss",
+                        inputs=[
+                            "rois_box_classes/targets",
+                            "rois_box_classes/weights",
+                            "rois/classes",
+                        ],
+                    ),
+                )
             )
-        )
+        return graph
 
     def as_predictor(self, batch_size: int, weights: str) -> keras.Model:
-        image = tf.keras.Input(shape=(self.image_dim, self.image_dim, 3), batch_size=batch_size, name="image")
-        model = KerasGraph(graph=FasterRCNNGraph(self.num_classes, training=False), name="FasterRCNN")
+        image = tf.keras.Input(
+            shape=(self.image_dim, self.image_dim, 3),
+            batch_size=batch_size,
+            name="image",
+        )
+        model = KerasGraph(
+            graph=self.build_graph(NeuralGraph(), training=False), name="FasterRCNN"
+        )
         predictor = keras.Model(image, model({"features": {"image": image}}))
         model.load_weights(weights)
         return predictor
@@ -280,7 +331,9 @@ class FasterRCNNBoxDetector(BoxDetector):
 
             scores = predictions["roi_sampler/scores"][i].reshape([-1])
             rois_scores = predictions["rois/objectness"][i].reshape([-1])
-            rois_classes = predictions["rois/classes"][i]
+            rois_classes = None
+            if "rois/classes" in predictions:
+                rois_classes = predictions["rois/classes"][i]
 
             if not self.use_rpn_predictions:
                 boxes = boxes + regression_boxes
@@ -289,7 +342,7 @@ class FasterRCNNBoxDetector(BoxDetector):
             output = BoxDetectionOutput.from_tf_boxes(
                 boxes=boxes,
                 scores=scores,
-                labels=rois_classes.argmax(-1),
+                labels=rois_classes.argmax(-1) if rois_classes is not None else None,
                 classes_scores=rois_classes,
             )
             outputs.append(output)
