@@ -48,13 +48,21 @@ class InputNode:
 class ImageInputNode(InputNode):
     def __init__(self):
         super().__init__(
-            "image", getter=lambda d: ImageData.from_dict(d).features.image
+            "image",
+            getter=tf.autograph.experimental.do_not_convert(
+                lambda d: ImageData.from_dict(d).features.image
+            ),
         )
 
 
 class LabelsInputNode(InputNode):
     def __init__(self):
-        super().__init__("labels", getter=lambda d: ImageData.from_dict(d).labels)
+        super().__init__(
+            "labels",
+            getter=tf.autograph.experimental.do_not_convert(
+                lambda d: ImageData.from_dict(d).labels
+            ),
+        )
 
 
 class Node:

@@ -10,6 +10,7 @@ from keras_detection.modular.core import (
     ImageInputNode,
     LabelsInputNode, KerasGraph,
 )
+from keras_detection.modular.rois.box_classes import BoxClassesTargetsBuilder
 from keras_detection.modular.rois.box_matcher import BoxMatcherLayer
 from keras_detection.modular.rois.box_objectness import BoxObjectnessTargetsBuilder
 from keras_detection.modular.rois.box_regression import BoxRegressionTargetsBuilder
@@ -89,9 +90,9 @@ class L1Loss(NodeLoss):
 
 
 class BCELoss(NodeLoss):
-    def __init__(self, inputs: List[str]):
+    def __init__(self, inputs: List[str], name: str = "box_objectness_loss"):
         super().__init__(inputs, weight=1.0)
-        self.loss_tracker = keras.metrics.Mean(name="box_objectness_loss")
+        self.loss_tracker = keras.metrics.Mean(name=name)
 
     def call(
         self,
@@ -185,6 +186,15 @@ class FasterRCNNGraph(NeuralGraph):
                 )
             )
 
+            self.add(
+                Node(
+                    "rois_box_classes",
+                    inputs=["labels", "roi_sampler/proposals", "box_matcher/match_indices"],
+                    module=BoxClassesTargetsBuilder(num_classes),
+                )
+            )
+
+
         self.add(
             Node(
                 "rois/objectness",
@@ -217,43 +227,46 @@ class FasterRCNNGraph(NeuralGraph):
             )
         )
 
+        self.add(
+            Node(
+                "rois/classes",
+                inputs=["roi_sampler/rois"],
+                module=SimpleConvHeadLayer(
+                    # plus dustbin
+                    num_filters=128, num_outputs=num_classes + 1, activation="sigmoid"
+                ),
+                loss=BCELoss(
+                    name="box_classes_loss",
+                    inputs=[
+                        "rois_box_classes/targets",
+                        "rois_box_classes/weights",
+                        "rois/classes",
+                    ]
+                ),
+            )
+        )
+
     def as_predictor(self, batch_size: int, weights: str) -> keras.Model:
         image = tf.keras.Input(shape=(self.image_dim, self.image_dim, 3), batch_size=batch_size, name="image")
         model = KerasGraph(graph=FasterRCNNGraph(self.num_classes, training=False), name="FasterRCNN")
         predictor = keras.Model(image, model({"features": {"image": image}}))
-        predictor.load_weights(weights, by_name=True)
+        model.load_weights(weights)
         return predictor
 
 
-class FPNKerasBoxDetector(BoxDetector):
+class FasterRCNNBoxDetector(BoxDetector):
     def __init__(
         self,
         model: keras.Model,
         use_rpn_predictions: bool = False,
         score_threshold: float = 0.5,
         iou_threshold: float = 0.35,
-        scores_type: str = "objectness",
     ):
         super().__init__(score_threshold, iou_threshold)
         self.model = model
-        self.scores_type = scores_type
         self.use_rpn_predictions = use_rpn_predictions
 
-    def _scores_selection(
-        self, objectness: np.ndarray, classes: np.ndarray
-    ) -> np.ndarray:
-        if self.scores_type == "objectness":
-            return objectness
-        elif self.scores_type == "classes":
-            return classes
-        elif self.scores_type == "objectness_and_classes":
-            return classes * objectness
-        elif self.scores_type == "objectness_or_classes":
-            return np.maximum(classes, objectness)
-
     def _predict(self, images: np.ndarray, **kwargs) -> List[BoxDetectionOutput]:
-
-        input_dim = self.model.input_shape[1]
 
         if len(images.shape) == 3:
             images = np.expand_dims(images, 0)
@@ -267,6 +280,7 @@ class FPNKerasBoxDetector(BoxDetector):
 
             scores = predictions["roi_sampler/scores"][i].reshape([-1])
             rois_scores = predictions["rois/objectness"][i].reshape([-1])
+            rois_classes = predictions["rois/classes"][i]
 
             if not self.use_rpn_predictions:
                 boxes = boxes + regression_boxes
@@ -275,7 +289,8 @@ class FPNKerasBoxDetector(BoxDetector):
             output = BoxDetectionOutput.from_tf_boxes(
                 boxes=boxes,
                 scores=scores,
-                labels=np.array([0] * boxes.shape[0])
+                labels=rois_classes.argmax(-1),
+                classes_scores=rois_classes,
             )
             outputs.append(output)
 

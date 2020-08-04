@@ -97,20 +97,29 @@ class BoxDetectionOutput(DataClass):
     @staticmethod
     def from_tf_boxes(
         boxes: np.ndarray,
-        labels: np.ndarray,
+        labels: Optional[np.ndarray] = None,
         scores: Optional[np.ndarray] = None,
         classes_scores: Optional[np.ndarray] = None,
     ) -> "BoxDetectionOutput":
+
         y, c = np_frame_ops.boxes_centers(boxes)
         h, w = np_frame_ops.boxes_heights_widths(boxes)
         boxes = np.stack([h, w, y, c], axis=-1)
+
+        if labels is None:
+            labels = np.zeros(shape=boxes.shape[0])
+
         if scores is None:
             scores = np.ones(shape=labels.shape)
+
+        if classes_scores is None:
+            classes_scores = np.ones(shape=labels.shape)
+
         return BoxDetectionOutput(
             boxes=boxes,
             labels=labels,
             scores=scores,
-            classes_scores=classes_scores or np.ones(shape=labels.shape),
+            classes_scores=classes_scores,
         )
 
 
