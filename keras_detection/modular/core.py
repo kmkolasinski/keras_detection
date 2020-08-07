@@ -125,9 +125,9 @@ class KerasGraph(keras.Model):
             inputs = [tensors[name] for name in node.inputs]
             print(f"> {node.name}({node.inputs}, inputs_as_list={node.inputs_as_list})")
             if node.inputs_as_list:
-                outputs = node.module(inputs, training=training, **node.call_kwargs)
+                outputs = node.module.call(inputs, training=training, **node.call_kwargs)
             else:
-                outputs = node.module(*inputs, training=training, **node.call_kwargs)
+                outputs = node.module.call(*inputs, training=training, **node.call_kwargs)
 
             node_name = node.name
             if isinstance(outputs, dict):
