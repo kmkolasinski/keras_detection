@@ -300,7 +300,7 @@ class FasterRCNNGraph(NeuralGraph):
         model = KerasGraph(
             graph=self.build_graph(NeuralGraph(), training=False), name="FasterRCNN"
         )
-        predictor = keras.Model(image, model({"features": {"image": image}}))
+        predictor = keras.Model(image, model.call({"features": {"image": image}}))
         model.load_weights(weights)
         return predictor
 
