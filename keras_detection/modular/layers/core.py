@@ -39,7 +39,7 @@ class ROISamplingLayer(TrainableModule):
         }
 
 
-class ROINMSSamplingLayer(Module):
+class ROINMSSamplingLayer(TrainableModule):
     def __init__(self, num_samples: int, crop_size: Tuple[int, int], **kwargs):
         super().__init__(**kwargs)
         self.crop_size = crop_size
