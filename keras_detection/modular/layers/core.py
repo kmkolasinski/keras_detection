@@ -46,6 +46,12 @@ class ROINMSSamplingLayer(Module):
         self.num_samples = num_samples
         self.roi_align = ROIAlignLayer(crop_size=crop_size)
 
+    @tf.function(input_signature=[
+        tf.TensorSpec([None, None, None, None], tf.float32, name='feature_map'),
+        tf.TensorSpec([None, None, None, None], tf.float32, name='proposals'),
+        tf.TensorSpec([None, None, None, None], tf.float32, name='scores'),
+        tf.TensorSpec(None, tf.bool, name='training'),
+    ])
     def call(
         self,
         feature_map: tf.Tensor,
