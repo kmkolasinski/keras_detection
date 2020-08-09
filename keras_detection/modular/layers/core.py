@@ -45,14 +45,13 @@ class ROINMSSamplingLayer(TrainableModule):
         self.crop_size = crop_size
         self.num_samples = num_samples
         self.roi_align = ROIAlignLayer(crop_size=crop_size)
+        self.batch_size = None
 
-    # @tf.function(input_signature=[
-    #     tf.TensorSpec([None, None, None, None], tf.float32, name='feature_map'),
-    #     tf.TensorSpec([None, None, None, None], tf.float32, name='proposals'),
-    #     tf.TensorSpec([None, None, None, None], tf.float32, name='scores'),
-    #     tf.TensorSpec(None, tf.bool, name='training'),
-    # ])
-    def call(
+    def call(self, inputs, training: bool = None, mask=None):
+        feature_map, proposals, scores = inputs
+        return self._call(feature_map, proposals, scores, training=training)
+
+    def _call(
         self,
         feature_map: tf.Tensor,
         proposals: tf.Tensor,
@@ -61,6 +60,18 @@ class ROINMSSamplingLayer(TrainableModule):
     ):
 
         batch_size = feature_map.shape[0]
+
+        # Note: batch_size is None when saving model to saved model.
+        # this few checks tries to fix this issue
+        if batch_size is not None:
+            self.batch_size = batch_size
+
+        if batch_size is None and self.batch_size is not None:
+            batch_size = self.batch_size
+
+        if batch_size is None:
+            raise ValueError("batch size is None!")
+
         fm_height = feature_map.shape[1]
         fm_width = feature_map.shape[2]
         num_channels = feature_map.shape[3]
@@ -129,7 +140,8 @@ class SimpleConvHeadLayer(TrainableModule):
 
     def call(self, inputs: tf.Tensor, **kwargs) -> tf.Tensor:
 
-        batch_size, num_samples, height, width, num_channels = inputs.shape.as_list()
+        _, num_samples, height, width, num_channels = inputs.shape.as_list()
+        batch_size = tf.shape(inputs)[0]
         inputs = tf.reshape(inputs, [batch_size * num_samples, height, width, num_channels])
         outputs = keras.layers.Activation(self.activation)(self.head_model(inputs))
         return tf.reshape(outputs, [batch_size, num_samples, self.num_outputs])

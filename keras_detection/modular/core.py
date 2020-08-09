@@ -25,8 +25,11 @@ class Module(ABC):
 
 
 class TrainableModule(keras.Model):
-    def call(self, **kwargs) -> ModuleOutput:
-        return super().call(**kwargs)
+    def _call(self, *args, **kwargs) -> ModuleOutput:
+        return super().call(*args, **kwargs)
+
+    def call(self, *args, **kwargs) -> ModuleOutput:
+        return self._call(*args, **kwargs)
 
 
 class NodeLoss(Module):

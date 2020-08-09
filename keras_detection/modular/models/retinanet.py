@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from typing import List
 
 import numpy as np
@@ -102,12 +102,18 @@ class FeatureMapHead(TrainableModule):
         self.head = head
         self.head_loss = loss
 
-    def call(
+    def call(self, inputs, training: bool = False) -> Dict[str, Any]:
+        # Keras does not work well with layers with more than one input
+        # especially when we want to save it to saved_model format
+        return self._call(*inputs, training=training)
+
+    def _call(
         self,
         feature_map: tf.Tensor,
         feature_map_desc: FeatureMapDescEstimator,
-        training: bool,
+        training: bool = False,
     ) -> Dict[str, Any]:
+
         predictions = self.head(feature_map, training=training)
         self.head_loss.fm_desc = feature_map_desc
         postprocessed_outputs = self.head_loss.decode_predictions(predictions)
@@ -115,7 +121,13 @@ class FeatureMapHead(TrainableModule):
         return outputs
 
     def as_node(self, inputs: List[str]) -> Node:
-        return Node(self.name, inputs=inputs, module=self, loss=self.head_loss)
+        return Node(
+            self.name,
+            inputs=inputs,
+            module=self,
+            loss=self.head_loss,
+            inputs_as_list=True,
+        )
 
 
 class RetinaDetector(NeuralGraph):

@@ -173,9 +173,8 @@ class FasterRCNNGraph(NeuralGraph):
                 "rpn",
                 inputs=["backbone/fm0/desc", "fpn/fm0"],
                 module=RPN(),
-                loss=RPNLoss(inputs=["backbone/fm0/desc", "labels"])
-                if training
-                else None,
+                loss=RPNLoss(inputs=["backbone/fm0/desc", "labels"]),
+                inputs_as_list=True
             )
         )
 
@@ -187,6 +186,7 @@ class FasterRCNNGraph(NeuralGraph):
                     num_samples=self.roi_sampling_params.get("num_samples", 64),
                     crop_size=self.roi_sampling_params.get("crop_size", (7, 7)),
                 ),
+                inputs_as_list=True
             )
         )
         if training:
@@ -251,8 +251,6 @@ class FasterRCNNGraph(NeuralGraph):
                         "rois/objectness",
                     ]
                 )
-                if training
-                else None,
             )
         )
 
@@ -308,7 +306,7 @@ class FasterRCNNGraph(NeuralGraph):
         model = KerasGraph(
             graph=self.build_graph(NeuralGraph(), training=False), name="FasterRCNN"
         )
-        predictor = keras.Model(image, model({"features": {"image": image}}))
+        predictor = keras.Model(image, model.call({"features": {"image": image}}, training=False))
         model.load_weights(weights)
         return predictor
 

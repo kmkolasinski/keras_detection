@@ -14,7 +14,11 @@ class RPN(TrainableModule):
         self.objectness_head = SingleConvHead("rpn/objectness", 1, activation="sigmoid")
         self.box_shape_ta = BoxShapeTarget()
 
-    def call(self, fm_desc: FeatureMapDesc, feature_map: tf.Tensor, training: bool = None, mask=None):
+    def call(self, inputs, training: bool = None, mask=None):
+        fm_desc, feature_map = inputs
+        return self._call(fm_desc, feature_map, training=training, mask=mask)
+
+    def _call(self, fm_desc: FeatureMapDesc, feature_map: tf.Tensor, training: bool = None, mask=None):
         raw_boxes = self.box_head(feature_map)
         objectness = self.objectness_head(feature_map)
         proposals = self.box_shape_ta.to_tf_boxes(self.box_shape_ta.postprocess_predictions(fm_desc, raw_boxes))
