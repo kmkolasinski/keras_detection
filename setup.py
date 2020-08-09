@@ -20,7 +20,7 @@ setup(
         'cython==0.29.*',
         'image-classifiers==1.0.0',
         'tqdm>=4.43.0',
-        'tensorflow-addons>=0.10.*',
+        'tensorflow-addons>=0.11.*',
         'imgaug>=0.4',
         'cached_property>=1.5',
         "cython==0.29.17",
