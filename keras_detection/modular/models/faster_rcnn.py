@@ -185,6 +185,7 @@ class FasterRCNNGraph(NeuralGraph):
                 module=ROINMSSamplingLayer(
                     num_samples=self.roi_sampling_params.get("num_samples", 64),
                     crop_size=self.roi_sampling_params.get("crop_size", (7, 7)),
+                    iou_threshold=self.roi_sampling_params.get("iou_threshold", 0.5),
                 ),
                 inputs_as_list=True
             )

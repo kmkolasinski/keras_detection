@@ -40,12 +40,13 @@ class ROISamplingLayer(TrainableModule):
 
 
 class ROINMSSamplingLayer(TrainableModule):
-    def __init__(self, num_samples: int, crop_size: Tuple[int, int], **kwargs):
+    def __init__(self, num_samples: int, crop_size: Tuple[int, int], iou_threshold: float = 0.5, **kwargs):
         super().__init__(**kwargs)
         self.crop_size = crop_size
         self.num_samples = num_samples
         self.roi_align = ROIAlignLayer(crop_size=crop_size)
         self.batch_size = None
+        self.iou_threshold = iou_threshold
 
     def call(self, inputs, training: bool = None, mask=None):
         feature_map, proposals, scores = inputs
@@ -86,7 +87,7 @@ class ROINMSSamplingLayer(TrainableModule):
                 batch_boxes,
                 batch_scores,
                 max_output_size=max_output_size,
-                iou_threshold=0.5,
+                iou_threshold=self.iou_threshold,
                 score_threshold=0.1,
             )
 
