@@ -1,3 +1,4 @@
+import uuid
 from typing import Tuple
 from numba import jit
 import numpy as np
@@ -48,6 +49,73 @@ def sample_min_max(min_max: Tuple[float, float]) -> float:
 
 
 @jit(nopython=True)
+def box_intersection(box_a: np.ndarray, box_b: np.ndarray) -> np.ndarray:
+    """
+    Compute intersection of two rectangles
+    """
+    y_min1, x_min1, y_max1, x_max1 = box_a
+    y_min2, x_min2, y_max2, x_max2 = box_b
+
+    min_ymax = np.minimum(y_max1, y_max2)
+    max_ymin = np.maximum(y_min1, y_min2)
+
+    min_xmax = np.minimum(x_max1, x_max2)
+    max_xmin = np.maximum(x_min1, x_min2)
+
+    if max_ymin >= min_ymax:
+        min_ymax = 0
+        max_ymin = 0
+
+    if max_xmin >= min_xmax:
+        min_ymax = 0
+        min_xmax = 0
+
+    return np.array([max_ymin, max_xmin, min_ymax, min_xmax])
+
+
+@jit(forceobj=True)
+def box_union(box_a: np.ndarray, box_b: np.ndarray) -> np.ndarray:
+    """Returns rectangle union polygon points"""
+    box_a = box_a.astype(np.float32)
+    box_b = box_b.astype(np.float32)
+    intersection = box_intersection(box_a, box_b)
+
+    points = np.array(
+        [
+            [box_a[0], box_a[1]],
+            [intersection[0], intersection[1]],
+            [box_b[0], box_b[1]],
+            [box_b[0], box_b[3]],
+            [intersection[0], intersection[3]],
+            [box_a[0], box_a[3]],
+            [box_a[2], box_a[3]],
+            [intersection[2], intersection[3]],
+            [box_b[2], box_b[3]],
+            [box_b[2], box_b[1]],
+            [intersection[2], intersection[1]],
+            [box_a[2], box_a[1]],
+        ]
+    )
+
+    intersection = np.array(
+        [
+            [intersection[0], intersection[1]],
+            [intersection[0], intersection[3]],
+            [intersection[2], intersection[3]],
+            [intersection[2], intersection[1]],
+        ]
+    )
+
+    center = intersection.mean(0)
+    directions = points - center
+    normed = directions / np.linalg.norm(directions, axis=1, keepdims=True)
+    angles = np.arctan2(normed[:, 0], normed[:, 1])
+    indices = np.argsort(angles)
+    points = points[indices]
+    return points
+
+
+@jit(nopython=True)
 def draw_rectangle(
     image: np.ndarray,
     rect: np.ndarray,
@@ -79,7 +147,7 @@ def draw_rectangle(
     return image
 
 
-@jit(nopython=True)
+@jit(forceobj=True)
 def draw_t_shape(
     image: np.ndarray,
     rect: np.ndarray,
@@ -87,7 +155,7 @@ def draw_t_shape(
     shape_type: int,
     alpha: float = 0.5,
     mode: int = BLEND_ADD,
-) -> np.ndarray:
+) -> Tuple[np.ndarray, np.ndarray]:
 
     row, col = divmod(shape_type, 3)
     ymin, xmin, ymax, xmax = rect
@@ -102,7 +170,8 @@ def draw_t_shape(
         image = draw_rectangle(
             image=image, rect=rect, color=color, alpha=alpha, mode=mode
         )
-    return image
+    polygon_mask = box_union(hrect, vrect)
+    return image, polygon_mask
 
 
 @jit(nopython=True)
@@ -115,7 +184,7 @@ def coord_outside_window(coord: float) -> float:
     return dcoord
 
 
-@jit(nopython=True)
+@jit(forceobj=True)
 def draw_random_t_shape(
     image: np.ndarray,
     color: np.ndarray,
@@ -125,7 +194,7 @@ def draw_random_t_shape(
     min_max_hw_ratio: Tuple[float, float] = (0.8, 1.2),
     alpha: float = 0.5,
     mode: int = BLEND_ADD,
-) -> Tuple[np.ndarray, np.ndarray, int]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
 
     shape_type = np.random.randint(0, 9)
     height = sample_min_max(min_max_height)
@@ -147,7 +216,7 @@ def draw_random_t_shape(
     bbox = np.array([ymin + dy, xmin + dx, ymax + dy, xmax + dx])
     image_rect = bbox * np.array([im_h, im_w, im_h, im_w])
 
-    image = draw_t_shape(
+    image, polygon_mask = draw_t_shape(
         image=image,
         rect=image_rect.astype(np.int64),
         color=color,
@@ -155,23 +224,25 @@ def draw_random_t_shape(
         alpha=alpha,
         mode=mode,
     )
-    return image, clip_bbox(bbox), shape_type
+    return image, clip_bbox(bbox), polygon_mask, shape_type
 
 
-@jit(nopython=True)
+@jit(forceobj=True)
 def draw_random_t_shape_image(
     image: np.ndarray,
-    boxes_output: np.ndarray,
-    labels_output: np.ndarray,
+    num_boxes: int,
     min_max_height: Tuple[float, float] = (0.1, 0.2),
     min_max_hw_ratio: Tuple[float, float] = (0.8, 1.2),
     alpha: float = 0.5,
     mode: int = BLEND_ADD,
     num_colors: int = 32,
-    color_min_value: int = 50
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    color_min_value: int = 50,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
-    num_boxes = boxes_output.shape[0]
+    boxes_output = np.zeros([num_boxes, 4], dtype=np.float32)
+    polygon_masks_output = np.zeros([num_boxes, 12, 2], dtype=np.float32)
+    labels_output = np.zeros([num_boxes], dtype=np.int32)
+
     grid_size = round(num_boxes ** 0.5)
 
     color_min_value = color_min_value // 255
@@ -190,7 +261,7 @@ def draw_random_t_shape_image(
         b = n * np.random.randint(color_min_value, num_colors)
         color = np.array([r, g, b], dtype=np.float32)
 
-        image, bbox, label = draw_random_t_shape(
+        image, bbox, polygon_mask, label = draw_random_t_shape(
             image=image,
             color=color,
             min_max_ypos=min_max_ypos,
@@ -202,7 +273,9 @@ def draw_random_t_shape_image(
         )
         boxes_output[i] = bbox
         labels_output[i] = label
-    return image, boxes_output, labels_output
+        polygon_masks_output[i] = polygon_mask
+
+    return image, boxes_output, polygon_masks_output, labels_output
 
 
 def create_random_rectangles_dataset_generator(
@@ -213,7 +286,7 @@ def create_random_rectangles_dataset_generator(
     alpha: float = 0.5,
     mode: int = BLEND_MULTIPLY,
     num_colors: int = 32,
-    color_min_value: int = 50
+    color_min_value: int = 50,
 ):
 
     assert color_min_value // 255 < num_colors
@@ -227,23 +300,98 @@ def create_random_rectangles_dataset_generator(
         image = image * bg_color
 
         num_boxes = np.random.randint(*min_max_num_boxes)
-        boxes = np.zeros([num_boxes, 4], dtype=np.float32)
-        labels = np.zeros([num_boxes], dtype=np.int64)
 
-        image, boxes, labels = draw_random_t_shape_image(
+        image, boxes, polygon_masks, labels = draw_random_t_shape_image(
             image.astype(np.float32),
-            boxes.astype(np.float32),
-            labels,
+            num_boxes=num_boxes,
             min_max_height=min_max_height,
             min_max_hw_ratio=min_max_hw_ratio,
             alpha=alpha,
             mode=mode,
             num_colors=num_colors,
-            color_min_value=color_min_value
+            color_min_value=color_min_value,
         )
 
         weights = np.ones_like(labels).astype(np.float32)
         image = np.array(255 * image, dtype=np.uint8)
         features = {"image": image}
-        labels = {"boxes": boxes, "labels": labels, "weights": weights}
+        labels = {
+            "boxes": boxes,
+            "labels": labels,
+            "polygon_masks": polygon_masks,
+            "weights": weights,
+        }
         yield {"features": features, "labels": labels}
+
+
+def create_random_rectangles_mmdet_dataset_generator(
+    image_size: Tuple[int, int] = (224, 224),
+    min_max_num_boxes: Tuple[int, int] = (5, 30),
+    min_max_height: Tuple[float, float] = (0.08, 0.15),
+    min_max_hw_ratio: Tuple[float, float] = (0.8, 1.2),
+    alpha: float = 0.5,
+    mode: int = BLEND_MULTIPLY,
+    num_colors: int = 32,
+    color_min_value: int = 50,
+):
+    """
+
+    Args:
+        image_size: (height, width) tuple
+        min_max_num_boxes:
+        min_max_height:
+        min_max_hw_ratio:
+        alpha:
+        mode:
+        num_colors:
+        color_min_value:
+
+
+    """
+    index = 0
+    for sample in create_random_rectangles_dataset_generator(
+        image_size=image_size,
+        min_max_num_boxes=min_max_num_boxes,
+        min_max_height=min_max_height,
+        min_max_hw_ratio=min_max_hw_ratio,
+        alpha=alpha,
+        mode=mode,
+        num_colors=num_colors,
+        color_min_value=color_min_value,
+    ):
+        filename = f"{uuid.uuid4().hex}.jpeg"
+
+        image_data = {
+            "file_name": filename,
+            "id": index,
+            "height": image_size[0],
+            "width": image_size[1],
+            "filename": filename,
+            "img": sample["features"]['image']
+        }
+        index += 1
+
+        tf_boxes = sample["labels"]["boxes"]
+        tf_masks_polygons = sample["labels"]["polygon_masks"]
+
+        ymin, xmin, ymax, xmax = (
+            tf_boxes[:, 0] * image_size[0],
+            tf_boxes[:, 1] * image_size[1],
+            tf_boxes[:, 2] * image_size[0],
+            tf_boxes[:, 3] * image_size[1],
+        )
+        bboxes = np.stack([xmin, ymin, xmax, ymax], axis=1)
+
+        masks = []
+        for i in range(tf_boxes.shape[0]):
+            mask_xy: np.ndarray = tf_masks_polygons[i, :, (1, 0)].T.reshape([-1])
+            masks.append([mask_xy.tolist()])
+
+        ann_data = {
+            "bboxes": bboxes,
+            "labels": sample["labels"]["labels"].astype(np.int64),
+            "bboxes_ignore": np.zeros((0, 4), dtype=np.float32),
+            "masks": masks,
+            "seg_map": filename,
+        }
+        yield image_data, ann_data
