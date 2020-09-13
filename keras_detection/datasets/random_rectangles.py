@@ -161,8 +161,8 @@ def draw_t_shape(
     ymin, xmin, ymax, xmax = rect
 
     # the code below assume 1/3 split
-    h_factor = 3  # sample_min_max((1/4, 1/2.5))
-    w_factor = 3  # sample_min_max((1/4, 1/2.5))
+    h_factor = 1/3  # sample_min_max((1/4, 1/2.5))
+    w_factor = 1/3  # sample_min_max((1/4, 1/2.5))
 
     height, width = (ymax - ymin) * h_factor, (xmax - xmin) * w_factor
 
