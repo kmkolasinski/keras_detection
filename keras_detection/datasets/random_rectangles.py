@@ -160,8 +160,9 @@ def draw_t_shape(
     row, col = divmod(shape_type, 3)
     ymin, xmin, ymax, xmax = rect
 
-    h_factor = sample_min_max((1/4, 1/2.5))
-    w_factor = sample_min_max((1/4, 1/2.5))
+    # the code below assume 1/3 split
+    h_factor = 3  # sample_min_max((1/4, 1/2.5))
+    w_factor = 3  # sample_min_max((1/4, 1/2.5))
 
     height, width = (ymax - ymin) * h_factor, (xmax - xmin) * w_factor
 
@@ -291,7 +292,8 @@ def create_random_rectangles_dataset_generator(
     mode: int = BLEND_MULTIPLY,
     num_colors: int = 32,
     color_min_value: int = 50,
-    keys: List[str] = None
+    keys: List[str] = None,
+    background_color: Tuple[float, float, float] = None
 ):
 
     if keys is None:
@@ -303,9 +305,13 @@ def create_random_rectangles_dataset_generator(
     while True:
 
         image = np.ones([image_size[0], image_size[1], 3])
-        bg_color = np.random.randint(1 + color_min_value // 255, num_colors, [1, 1, 3])
-        bg_color = bg_color / (abs(bg_color.max()) + 1e-6)
-        image = image * bg_color
+        if background_color is None:
+            bg_color = np.random.randint(1 + color_min_value // 255, num_colors, [1, 1, 3])
+            bg_color = bg_color / (abs(bg_color.max()) + 1e-6)
+            image = image * bg_color
+        else:
+            bg_color = np.array(background_color).reshape([1, 1, 3])
+            image = image * bg_color
 
         num_boxes = np.random.randint(*min_max_num_boxes)
 
