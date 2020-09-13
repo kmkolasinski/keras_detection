@@ -1,5 +1,5 @@
 import uuid
-from typing import Tuple
+from typing import Tuple, List
 from numba import jit
 import numpy as np
 
@@ -159,7 +159,11 @@ def draw_t_shape(
 
     row, col = divmod(shape_type, 3)
     ymin, xmin, ymax, xmax = rect
-    height, width = (ymax - ymin) / 3, (xmax - xmin) / 3
+
+    h_factor = sample_min_max((1/4, 1/2.5))
+    w_factor = sample_min_max((1/4, 1/2.5))
+
+    height, width = (ymax - ymin) * h_factor, (xmax - xmin) * w_factor
 
     hrect = ymin + height * row, xmin, ymin + (row + 1) * height, xmax
     vrect = ymin, xmin + width * col, ymax, xmin + (col + 1) * width
@@ -287,7 +291,11 @@ def create_random_rectangles_dataset_generator(
     mode: int = BLEND_MULTIPLY,
     num_colors: int = 32,
     color_min_value: int = 50,
+    keys: List[str] = None
 ):
+
+    if keys is None:
+        keys = ["boxes", "labels", "weights"]
 
     assert color_min_value // 255 < num_colors
     assert min_max_num_boxes[0] >= 1
@@ -321,6 +329,7 @@ def create_random_rectangles_dataset_generator(
             "polygon_masks": polygon_masks,
             "weights": weights,
         }
+        labels = {k: labels[k] for k in keys}
         yield {"features": features, "labels": labels}
 
 
