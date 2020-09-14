@@ -110,6 +110,10 @@ class LabelsFrame(DataClass, Generic[Tensor]):
                 f"Frame content: {self}"
             )
 
+    @property
+    def boxes_x1y1x2y2(self) -> np.ndarray:
+        return self.boxes[:, (1, 0, 3, 2)]
+
     def to_imgaug_boxes(self, image: np.ndarray) -> BoundingBoxesOnImage:
         boxes = self.boxes
         assert isinstance(boxes, np.ndarray), "Only numpy arrays are supported"

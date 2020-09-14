@@ -70,7 +70,7 @@ class BoxDetectionOutput(DataClass):
         return BoxDetectionOutput(**fields)
 
     def to_labels_frame(self) -> LabelsFrame[np.ndarray]:
-        return LabelsFrame(boxes=self.as_tf_boxes, labels=self.labels)
+        return LabelsFrame(boxes=self.as_tf_boxes, labels=self.labels, weights=self.scores)
 
     def draw(
         self,
