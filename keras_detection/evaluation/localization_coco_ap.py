@@ -10,7 +10,7 @@ from keras_detection.evaluation.detection_metrics import Metric
 from keras_detection.structures import LabelsFrame
 
 
-def image_compute_coco_ap(
+def image_coco_ap(
     target: LabelsFrame[np.ndarray],
     predicted: LabelsFrame[np.ndarray],
     ovthresholds: Optional[List[float]] = None,
@@ -31,8 +31,8 @@ def image_compute_coco_ap(
         predicted.weights,
         ovthresholds=ovthresholds,
     )
-    return [Metric("avg_AP", float(avg_ap), num_targets)] + [
-        Metric(f"AP@{int(th*100)}", float(ap), num_targets)
+    return [Metric("localization/avg_AP", float(avg_ap), num_targets)] + [
+        Metric(f"localization/AP@{int(th*100)}", float(ap), num_targets)
         for th, ap in zip(ovthresholds, aps)
     ]
 
