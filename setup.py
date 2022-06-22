@@ -14,7 +14,7 @@ setup(
     classifiers=[],
     install_requires=[
         'numba==0.48.0',
-        'numpy==1.16.4',
+        'numpy==1.22.0',
         'tsalib==0.2.1',
         'matplotlib>=3.1.*',
         'image-classifiers==1.0.0',
